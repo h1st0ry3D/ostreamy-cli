@@ -1,4 +1,4 @@
-# ostreamy-cli
+# Ostreamy CLI
 
 Stream-ready Hyprland layout for Sunshine to Moonlight on a Steam Deck, built for
 Omarchy. It makes streaming work while the host monitor is switched off, and hides
