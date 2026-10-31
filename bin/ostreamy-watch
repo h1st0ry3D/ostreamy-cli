@@ -26,6 +26,7 @@ log "watching Moonlight activity (poll ${INTERVAL}s, grace ${GRACE}s)"
 
 activated=0
 last_live=0
+quiet_until=0
 log_offset=$(log_size)
 scan_offset=$log_offset
 
@@ -41,7 +42,9 @@ while :; do
   if [ "$activated" -eq 0 ]; then
     trigger=0
     [ "$live" -gt 0 ] && trigger=1
-    [ "$fresh" -eq 1 ] && trigger=1
+    # A short-lived connection right after a session ends is usually Moonlight
+    # polling its host list, not a new stream: do not re-arm during the quiet window.
+    [ "$fresh" -eq 1 ] && [ "$now" -ge "$quiet_until" ] && trigger=1
     [ "$session_started" -eq 1 ] && trigger=1
 
     if [ "$trigger" -eq 1 ]; then
@@ -73,7 +76,8 @@ while :; do
       log "Sunshine reported disconnect -> native layout"
       "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
       activated=0
-          elif [ "$live" -gt 0 ]; then
+      quiet_until=$((now + QUIET))
+    elif [ "$live" -gt 0 ]; then
       if ! mirror_active; then
         log "mirror dropped -> re-applying mirror"
         "$OSTREAMY" mirror >/dev/null 2>&1 || true
@@ -81,13 +85,14 @@ while :; do
     elif ! mirror_active; then
       log "layout switched off externally -> standby"
       activated=0
-          elif [ $((now - last_live)) -ge "$GRACE" ]; then
+      quiet_until=$((now + QUIET))
+    elif [ $((now - last_live)) -ge "$GRACE" ]; then
       log "no live client for ${GRACE}s -> native layout"
       "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
       activated=0
-          fi
+      quiet_until=$((now + QUIET))
+    fi
   fi
-
   remember_endpoints
   scan_offset=$(log_size)
   sleep "$INTERVAL"

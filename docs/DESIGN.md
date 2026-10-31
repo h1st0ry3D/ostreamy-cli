@@ -90,7 +90,12 @@ Final rules:
 | native layout + nothing live | deliberate manual `off` | standby, do not re-arm |
 
 Novelty is the key: the watcher keeps a snapshot of client endpoints and switches on
-only when one appears that was not in the snapshot. A leftover `TIME-WAIT` from the
+only when one appears that was not in the snapshot. Novelty alone is not enough: when
+the Deck quits a stream it keeps polling its host list, which creates *new* short-lived
+connections and re-armed the layout two seconds after the session ended. A 20 s quiet
+window after every switch-off ignores those polls; a live connection or
+"New streaming session started" still arms immediately, so a real session is never
+delayed. A leftover `TIME-WAIT` from the
 session that just ended is already in the snapshot, so it can never re-arm the
 layout — which is what a count-based rule (and a cooldown) failed to guarantee.
 Endpoints are normalised to the client end: inbound connections have the client in

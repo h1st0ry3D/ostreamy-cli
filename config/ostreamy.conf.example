@@ -9,9 +9,14 @@ OUTPUT=STREAM
 # pixel-perfect picture on a 1440p desktop monitor.
 MODE=1920x1200@60
 
-# Seconds without a *live* client before the layout goes back to native. Has to
-# outlast TIME-WAIT (60 s) on Sunshine's control sockets.
-GRACE=75
+# Fallback: seconds without a live client before the layout goes back to native,
+# when Sunshine logged no disconnect line.
+GRACE=30
+
+# Seconds after a switch-off during which *new short-lived* connections (Moonlight
+# menu/status polling after the user quits) cannot re-arm the layout. A real session
+# still arms it: a live connection or "New streaming session started" bypasses this.
+QUIET=20
 
 # Poll interval for the watcher, seconds.
 INTERVAL=0.25

@@ -23,7 +23,7 @@ the virtual display again when nobody is streaming.
 | Stream goes black when the monitor is switched off | the panel's output disappears, Hyprland stops compositing, screencopy has no source | capture a headless output that never disappears |
 | Stream freezes after a few seconds, controller still works | Sunshine resolved `output_name` before the output existed, fell back to the panel, then the resolution changed under the live encoder | the output stays enabled with a fixed mode; only the layout moves |
 | Invisible 1920x1200 display steals mouse/keyboard and workspace shortcuts | two enabled outputs share coordinates; the virtual one holds focus | the output is parked at a negative x and never overlaps; `fix` restores focus |
-| `off` does not restore the desktop | TIME-WAIT sockets from the closed client re-armed the layout | only a *new* client endpoint re-arms it |
+| `off` does not restore the desktop | closed-client sockets or menu polling re-armed the layout | only a *new* client endpoint outside a 20 s post-session quiet window re-arms it |
 | Desktop returns squashed at 60 Hz | panel stuck mirroring the 16:10 stream | `off` reloads a mirror-free rule and restores the panel's own mode |
 
 ## Requirements
