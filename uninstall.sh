@@ -3,8 +3,10 @@
 # unless --purge is given.
 set -euo pipefail
 
-MARK_BEGIN="# >>> ostreamy >>>"
-MARK_END="# <<< ostreamy <<<"
+MARK_BEGIN_INI="# >>> ostreamy >>>"
+MARK_END_INI="# <<< ostreamy <<<"
+MARK_BEGIN_LUA="-- >>> ostreamy >>>"
+MARK_END_LUA="-- <<< ostreamy <<<"
 HYPR_CONF="$HOME/.config/hypr/monitors.lua"
 SUNSHINE_CONF="$HOME/.config/sunshine/sunshine.conf"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ostreamy"
@@ -24,13 +26,17 @@ systemctl --user daemon-reload
 say SET "scripts and unit removed"
 
 strip_block() {
-  local file="$1" latest tmp
+  local file="$1" latest tmp b e
+  case "$file" in
+    *.lua) b="$MARK_BEGIN_LUA"; e="$MARK_END_LUA" ;;
+    *)     b="$MARK_BEGIN_INI"; e="$MARK_END_INI" ;;
+  esac
   [ -f "$file" ] || return 0
-  grep -qF "$MARK_BEGIN" "$file" || return 0
+  grep -qF "$b" "$file" || return 0
   cp "$file" "$file.bak.$(date +%s)"
   latest=$(ls -t "$file".bak.* | head -1)
   tmp=$(mktemp)
-  awk -v b="$MARK_BEGIN" -v e="$MARK_END" '
+  awk -v b="$b" -v e="$e" '
     $0 == b {skip=1; next}
     $0 == e {skip=0; next}
     !skip {print}

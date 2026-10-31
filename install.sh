@@ -16,8 +16,13 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ostreamy"
 CONF="$CONF_DIR/config.sh"
 HYPR_CONF="$HOME/.config/hypr/monitors.lua"
 SUNSHINE_CONF="$HOME/.config/sunshine/sunshine.conf"
-MARK_BEGIN="# >>> ostreamy >>>"
-MARK_END="# <<< ostreamy <<<"
+# Markers must match the file's comment syntax: `#` breaks a .lua config.
+MARK_BEGIN_LUA="-- >>> ostreamy >>>"
+MARK_END_LUA="-- <<< ostreamy <<<"
+MARK_BEGIN_INI="# >>> ostreamy >>>"
+MARK_END_INI="# <<< ostreamy <<<"
+MARK_BEGIN="$MARK_BEGIN_INI"
+MARK_END="$MARK_END_INI"
 
 do_hypr=1
 do_sunshine=1
@@ -85,21 +90,33 @@ fi
 
 # --- Hyprland snippet -------------------------------------------------------
 if [ "$do_hypr" -eq 1 ]; then
-  if [ -f "$HYPR_CONF" ] && grep -qF "$MARK_BEGIN" "$HYPR_CONF"; then
+  if [ -f "$HYPR_CONF" ] && grep -qF "$MARK_BEGIN_LUA" "$HYPR_CONF"; then
     say OK "hyprland snippet already present in $HYPR_CONF"
   elif [ -f "$HYPR_CONF" ]; then
     cp "$HYPR_CONF" "$HYPR_CONF.bak.$(date +%s)"
+    # Migrate a block written with INI markers by an older installer: `#` is not a
+    # Lua comment and makes the whole config fail to load.
+    if grep -qF "$MARK_BEGIN_INI" "$HYPR_CONF"; then
+      tmp=$(mktemp)
+      awk -v b="$MARK_BEGIN_INI" -v e="$MARK_END_INI" '
+        $0 == b {skip=1; next}
+        $0 == e {skip=0; next}
+        !skip {print}
+      ' "$HYPR_CONF" > "$tmp"
+      mv "$tmp" "$HYPR_CONF"
+      say INFO "migrated legacy # markers out of $HYPR_CONF"
+    fi
     # shellcheck disable=SC1090
     . "$CONF"
     mode="${MODE:-1920x1200@60}"
     width="${mode%%x*}"
     pos="-${width}x0"
     {
-      printf '\n%s\n' "$MARK_BEGIN"
+      printf '\n%s\n' "$MARK_BEGIN_LUA"
       # The template already has "--" comments; code lines must stay live.
       sed -e "s|__MODE__|$mode|g" -e "s|__POS__|$pos|g" \
           -e "s|__OUTPUT__|${OUTPUT:-STREAM}|g" "$REPO/hypr/ostreamy.lua"
-      printf '%s\n' "$MARK_END"
+      printf '%s\n' "$MARK_END_LUA"
     } >> "$HYPR_CONF"
     say SET "appended snippet to $HYPR_CONF (backup kept)"
   else
@@ -119,17 +136,17 @@ if [ "$do_sunshine" -eq 1 ]; then
       elif [ -d /dev/dri ]; then encoder=vaapi
       else encoder=software; fi ;;
   esac
-  if grep -qF "$MARK_BEGIN" "$SUNSHINE_CONF"; then
+  if grep -qF "$MARK_BEGIN_INI" "$SUNSHINE_CONF"; then
     say OK "sunshine snippet already present"
   else
     cp "$SUNSHINE_CONF" "$SUNSHINE_CONF.bak.$(date +%s)" 2>/dev/null || true
     {
-      printf '\n%s\n' "$MARK_BEGIN"
+      printf '\n%s\n' "$MARK_BEGIN_INI"
       printf 'output_name = STREAM\n'
       printf 'encoder = %s\n' "$encoder"
       printf '# AV1 must stay unadvertised: Steam Deck has no AV1 hardware decoder.\n'
       grep -q '^av1_mode' "$SUNSHINE_CONF" || printf 'av1_mode = 1\n'
-      printf '%s\n' "$MARK_END"
+      printf '%s\n' "$MARK_END_INI"
     } >> "$SUNSHINE_CONF"
     say SET "sunshine.conf: output_name=STREAM, encoder=$encoder"
   fi
