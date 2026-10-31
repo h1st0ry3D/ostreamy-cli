@@ -48,22 +48,31 @@ panel_mode_int() {
   monitors | jq -r --arg n "$1" '.[] | select(.name == $n) | "\(.width)x\(.height)@\(.refreshRate|round)"' | head -n 1
 }
 
-# Highest refresh mode at the panel's current resolution. A reload re-applies the
-# compositor's own rules, and on Omarchy the catch-all `output = ""` can shadow a
-# per-monitor rule, so "restore native" must not depend on that rule: pick the best
-# mode explicitly.
+# The panel's own best mode: largest available resolution, highest refresh within
+# it. Must NOT be derived from the panel's *current* resolution: while the panel
+# mirrors STREAM it reports the stream's size (1920x1200), so "restore the current
+# resolution" would restore the Deck resolution instead of the monitor's native one.
 panel_best_mode() {
   local name
   name="$1"
   monitors | jq -r --arg n "$name" '
     ([.[] | select(.name == $n)][0]) as $m
     | ($m.availableModes // [])
-    | map(select(test("^" + ($m.width|tostring) + "x" + ($m.height|tostring) + "@")))
-    | if length > 0 then
-        (map({ s: ., r: (sub(".*@"; "") | sub("Hz$"; "") | sub("\\..*$"; "") | tonumber) })
-         | sort_by(.r) | last | .s | sub("Hz$"; ""))
-      else ("\($m.width)x\($m.height)@\($m.refreshRate|round)") end' | head -n 1
+    | map(select(test("^[0-9]+x[0-9]+@[0-9.]+Hz$")))
+    | map(. as $s
+          | { s: $s,
+              w: ($s | split("x")[0] | tonumber),
+              h: ($s | split("x")[1] | split("@")[0] | tonumber),
+              r: ($s | split("@")[1] | sub("Hz$"; "") | tonumber) })
+    | if length == 0 then "\($m.width)x\($m.height)@\($m.refreshRate|round)"
+      else
+        (map(.w * .h) | max) as $area
+        | map(select(.w * .h == $area))
+        | sort_by(.r) | last
+        | "\(.w)x\(.h)@\(.r|round)"
+      end' | head -n 1
 }
+
 panel_scale() {
   monitors | jq -r --arg n "$1" '.[] | select(.name == $n) | "\(.scale)"' | head -n 1
 }

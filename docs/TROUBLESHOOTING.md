@@ -76,6 +76,16 @@ hyprctl monitors all -j | jq -r '.[] | "\(.name) \(.width)x\(.height) mirrorOf=\
 
 `mirrorOf` must be `none` and the panel must show its native mode.
 
+If the panel keeps the stream's resolution (e.g. 1920x1200 or 1280x800) after a
+stream, the restore picked the mode from the *mirroring* state, where the panel
+reports the stream's size. Current versions pick the panel's largest available
+resolution and highest refresh inside it, independent of the mirror:
+
+```bash
+hyprctl monitors all -j | jq -r '.[] | "\(.name) \(.width)x\(.height)@\(.refreshRate)"'
+ostreamy off
+```
+
 ## Client cannot connect
 
 ```bash

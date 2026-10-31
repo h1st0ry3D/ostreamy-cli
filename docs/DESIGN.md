@@ -125,7 +125,15 @@ the live instance from `hyprctl instances` instead of trusting the environment.
 - VP9 is unavailable: Sunshine's encoders are nvenc/quicksync/amdvce/vaapi/vulkan/
   software, NVENC has no VP9 encoder, and Moonlight supports H.264/HEVC/AV1 only.
 
-## 10. Ordering that avoids the overlap warning
+## 10. Restoring the panel means its native mode, not its current one
+
+While the panel mirrors a 16:10 output it reports that output's size. Deriving the
+"restore" mode from the panel's current resolution therefore restores the Deck's
+resolution (1920x1200) instead of the monitor's (2560x1440@144). ostreamy picks the
+panel's largest available mode and the highest refresh within it, so the result does
+not depend on whether a mirror is active.
+
+## 11. Ordering that avoids the overlap warning
 
 Both directions used to overlap for a moment:
 

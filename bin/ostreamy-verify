@@ -75,6 +75,15 @@ else
   focus=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
   [ "$focus" = "$OUTPUT" ] && bad "focus is on $OUTPUT while idle (run 'ostreamy fix')" \
     || ok "focus on $focus"
+  # "Restored" must mean the panel's native mode, not the stream's size leaking
+  # through while it was mirroring.
+  parea=$(monitors | jq -r --arg n "$OUTPUT" '[.[] | select(.name != $n)][0] | .width * .height')
+  sarea=$(monitors | jq -r --arg n "$OUTPUT" '[.[] | select(.name == $n)][0] | .width * .height')
+  if [ -n "$parea" ] && [ -n "$sarea" ] && [ "$parea" -le "$sarea" ]; then
+    bad "panel ($parea px) is not larger than $OUTPUT ($sarea px): resolution not restored"
+  else
+    ok "panel resolution restored ($parea px)"
+  fi
 fi
 
 echo
