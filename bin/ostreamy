@@ -1,13 +1,13 @@
 #!/bin/bash
 # Ostreamy - switch the Hyprland layout between desktop and Sunshine-stream ready.
 #
-#   Ostreamy ensure          create STREAM if missing, pin its mode, park it
-#   Ostreamy on              stream-ready: move workspaces to STREAM, mirror panel
-#   Ostreamy off             native: unmirror, workspaces back, focus panel
-#   Ostreamy mirror          re-apply only the mirror (safe mid-session)
-#   Ostreamy fix             pull workspaces/focus back to the panel
-#   Ostreamy mode WxH[@Hz]   change the captured resolution/refresh and save it
-#   Ostreamy status          print the current layout
+#   ostreamy ensure          create STREAM if missing, pin its mode, park it
+#   ostreamy on              stream-ready: move workspaces to STREAM, mirror panel
+#   ostreamy off             native: unmirror, workspaces back, focus panel
+#   ostreamy mirror          re-apply only the mirror (safe mid-session)
+#   ostreamy fix             pull workspaces/focus back to the panel
+#   ostreamy mode WxH[@Hz]   change the captured resolution/refresh and save it
+#   ostreamy status          print the current layout
 #
 # STREAM itself is never created/destroyed/enabled/disabled while Sunshine runs.
 

@@ -9,6 +9,19 @@
 
 set -euo pipefail
 
+usage() {
+  cat <<'TXT'
+Install Ostreamy: a stream-ready Hyprland layout for Sunshine + Moonlight.
+Idempotent: safe to re-run after Hyprland or Sunshine updates.
+
+  ./install.sh                 install scripts, unit, config, Hyprland snippet
+  ./install.sh --no-hypr       skip editing ~/.config/hypr/monitors.lua
+  ./install.sh --no-sunshine   skip touching sunshine.conf
+  ./install.sh --encoder auto  nvenc|vaapi|software (default: auto-detect)
+TXT
+  exit 0
+}
+
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BIN_DIR="$HOME/.local/bin"
 UNIT_DIR="$HOME/.config/systemd/user"
@@ -30,7 +43,7 @@ while [ $# -gt 0 ]; do
     --no-hypr)     do_hypr=0 ;;
     --no-sunshine) do_sunshine=0 ;;
     --encoder)     shift; encoder=${1:-auto} ;;
-    -h|--help)     sed -n '2,10p' "$0"; exit 0 ;;
+    -h|--help)     usage ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift

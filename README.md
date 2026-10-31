@@ -126,7 +126,7 @@ Makefile                 make check runs lint, smoke and verify
 ```
 
 Configuration lives in `~/.config/ostreamy/config.sh` (output name, mode, grace,
-poll interval, ports). `MODE` is `WIDTHxHEIGHT@HZ`; prefer `ostreamy mode` over
+quiet window, poll interval, ports). `MODE` is `WIDTHxHEIGHT@HZ`; prefer `ostreamy mode` over
 editing it by hand, because the command also updates the Hyprland rule. If you do
 edit it, run `ostreamy ensure` afterwards to sync the rule.
 

@@ -52,7 +52,18 @@ strip_block() {
 strip_block "$HYPR_CONF"
 strip_block "$SUNSHINE_CONF"
 hyprctl reload >/dev/null 2>&1 || true
+
+# Removing the output while Sunshine captures it aborts Sunshine. Stop it first,
+# then remove, then start it again so the host is not left dead.
+sunshine_was_active=0
+systemctl --user is-active --quiet sunshine && sunshine_was_active=1
+if [ "$sunshine_was_active" -eq 1 ]; then
+  systemctl --user stop sunshine >/dev/null 2>&1 || true
+fi
 hyprctl output remove STREAM >/dev/null 2>&1 || true
+if [ "$sunshine_was_active" -eq 1 ]; then
+  systemctl --user start sunshine >/dev/null 2>&1 || true
+fi
 
 if [ "$purge" -eq 1 ]; then
   rm -rf "$CONF_DIR"
