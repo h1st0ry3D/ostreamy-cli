@@ -1,0 +1,78 @@
+#!/bin/bash
+# ostreamy - switch the Hyprland layout between desktop and Sunshine-stream ready.
+#
+#   ostreamy ensure          create STREAM if missing, pin its mode, park it
+#   ostreamy on              stream-ready: move workspaces to STREAM, mirror panel
+#   ostreamy off             native: unmirror, workspaces back, focus panel
+#   ostreamy mirror          re-apply only the mirror (safe mid-session)
+#   ostreamy fix             pull workspaces/focus back to the panel
+#   ostreamy status          print the current layout
+#
+# STREAM itself is never created/destroyed/enabled/disabled while Sunshine runs.
+
+set -u
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+for cand in "$SELF_DIR/../lib/ostreamy/common.sh" "$SELF_DIR/common.sh"; do
+  # shellcheck disable=SC1090
+  [ -f "$cand" ] && { . "$cand"; break; }
+done
+
+
+# $1 = mirror | plain
+full_switch_on() {
+  local created
+  ensure_output; created=$?
+  if [ "$created" -eq 2 ] && systemctl --user is-active --quiet sunshine 2>/dev/null; then
+    # Sunshine picked its target before STREAM existed; restart so it retargets.
+    systemctl --user restart sunshine >/dev/null 2>&1 || true
+  fi
+  apply_panel_rule mirror
+  move_workspaces "$(panel_name)" "$OUTPUT"
+  sleep "$PUMP"
+  apply_panel_rule mirror
+}
+
+full_switch_off() {
+  local name
+  name=$(panel_name); [ -n "$name" ] || return 0
+  # A runtime mirror cannot be cleared by re-applying a rule, only by a reload with
+  # a mirror-free monitor rule (the shipped hypr snippet has none).
+  hyprctl reload >/dev/null 2>&1 || true
+  sleep "$PUMP"
+  move_workspaces "$OUTPUT" "$name"
+  rescue_orphans "$name"
+  apply_panel_rule plain
+  ensure_output >/dev/null 2>&1 || true
+  focus_a_windowed_workspace
+  # Authoritative: if a concurrent switch-on raced us, clear it again.
+  for _ in 1 2 3; do
+    mirror_active || break
+    hyprctl reload >/dev/null 2>&1 || true
+    sleep 0.5
+    move_workspaces "$OUTPUT" "$name"
+    apply_panel_rule plain
+    focus_a_windowed_workspace
+  done
+}
+
+status() {
+  printf 'output: %s (%s)\n' "$OUTPUT" "$(exists && echo present || echo MISSING)"
+  monitors | jq -r '.[] | "\(.name) \(.width)x\(.height)@\(.refreshRate) at \(.x),\(.y) mirrorOf=\(.mirrorOf) disabled=\(.disabled)"'
+  hyprctl workspaces -j 2>/dev/null | jq -r '.[] | "ws \(.id) -> \(.monitor) (\(.windows) windows)"'
+}
+
+resolve_sig
+[ -z "$(panel_name)" ] && { echo "no physical output found; is Hyprland running?" >&2; exit 1; }
+
+case "${1:-status}" in
+  ensure)  ensure_output >/dev/null 2>&1; status ;;
+  on)      full_switch_on;  status ;;
+  off)     full_switch_off; status ;;
+  mirror)  apply_panel_rule mirror ;;
+  fix)     move_workspaces "$OUTPUT" "$(panel_name)"; focus_a_windowed_workspace ;;
+  status)  status ;;
+  *)
+    printf 'usage: %s {ensure|on|off|mirror|fix|status}\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

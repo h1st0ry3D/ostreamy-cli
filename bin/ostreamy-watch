@@ -1,0 +1,94 @@
+#!/bin/bash
+# Watch for Moonlight activity and switch the layout around it.
+#
+# Signals (see docs/DESIGN.md for the evidence behind each one):
+#   on  - a live connection (ESTAB/CLOSE-WAIT/SYN) on Sunshine's ports, a *new*
+#         remote endpoint appearing (a fresh client), or "New streaming session
+#         started" in sunshine.log
+#   off - "CLIENT DISCONNECTED"/"Streaming session ended" in sunshine.log, or no
+#         live connection for GRACE seconds, or the layout being switched off
+#         externally while nothing is live (manual `ostreamy off`)
+
+set -u
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+for cand in "$SELF_DIR/../lib/ostreamy/common.sh" "$SELF_DIR/common.sh"; do
+  # shellcheck disable=SC1090
+  [ -f "$cand" ] && { . "$cand"; break; }
+done
+
+OSTREAMY=${OSTREAMY:-$(command -v ostreamy || echo "$SELF_DIR/ostreamy")}
+
+log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+resolve_sig
+"$OSTREAMY" ensure >/dev/null 2>&1 || true
+log "watching Moonlight activity (poll ${INTERVAL}s, grace ${GRACE}s)"
+
+activated=0
+last_live=0
+log_offset=$(log_size)
+scan_offset=$log_offset
+
+while :; do
+  resolve_sig
+  now=$(date +%s)
+  live=$(live_connections)
+  fresh=0
+  new_endpoints && fresh=1
+  session_started=0
+  log_since "$scan_offset" 'New streaming session started' && session_started=1
+
+  if [ "$activated" -eq 0 ]; then
+    trigger=0
+    [ "$live" -gt 0 ] && trigger=1
+    [ "$fresh" -eq 1 ] && trigger=1
+    [ "$session_started" -eq 1 ] && trigger=1
+
+    if [ "$trigger" -eq 1 ]; then
+      log "client connected -> stream-ready layout"
+      "$OSTREAMY" on >/dev/null 2>&1 || log "layout switch failed"
+      activated=1
+      last_live=$now
+      log_offset=$(log_size)
+    elif [ "$session_started" -eq 1 ]; then
+      # Session began while the layout was idle: Sunshine is capturing an empty
+      # STREAM and will deliver one stale frame. Switch and rebuild the capture.
+      log "session started while idle -> switching and restarting Sunshine"
+      "$OSTREAMY" on >/dev/null 2>&1 || true
+      systemctl --user restart sunshine >/dev/null 2>&1 || true
+      activated=1
+      last_live=$now
+      log_offset=$(log_size)
+    else
+      focused=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
+      if [ "$focused" = "$OUTPUT" ]; then
+        log "focus left on $OUTPUT while idle -> restoring panel"
+        "$OSTREAMY" fix >/dev/null 2>&1 || true
+      fi
+    fi
+  else
+    [ "$live" -gt 0 ] && last_live=$now
+
+    if log_since "$log_offset" 'CLIENT DISCONNECTED|Streaming session ended'; then
+      log "Sunshine reported disconnect -> native layout"
+      "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
+      activated=0
+          elif [ "$live" -gt 0 ]; then
+      if ! mirror_active; then
+        log "mirror dropped -> re-applying mirror"
+        "$OSTREAMY" mirror >/dev/null 2>&1 || true
+      fi
+    elif ! mirror_active; then
+      log "layout switched off externally -> standby"
+      activated=0
+          elif [ $((now - last_live)) -ge "$GRACE" ]; then
+      log "no live client for ${GRACE}s -> native layout"
+      "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
+      activated=0
+          fi
+  fi
+
+  remember_endpoints
+  scan_offset=$(log_size)
+  sleep "$INTERVAL"
+done

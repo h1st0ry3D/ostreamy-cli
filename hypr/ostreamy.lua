@@ -1,0 +1,17 @@
+-- ostreamy: persistent headless output captured by Sunshine.
+--
+-- Inserted by install.sh between "# >>> ostreamy >>>" markers, and removed again by
+-- uninstall.sh. Keep this block free of mirror settings: a runtime mirror cannot be
+-- cleared by re-applying a rule, so ostreamy switches the mirror at runtime with
+-- `hyprctl eval` and clears it with `hyprctl reload` (which lands here, mirror-free).
+--
+-- The output is parked at a negative x so it can never overlap the primary output:
+-- two enabled outputs at the same origin make Hyprland warn about an invalid layout
+-- and send pointer input to the invisible one. The primary output's own
+-- position = "auto" then places it at 0,0.
+--
+-- It stays ENABLED at all times. Sunshine resolves output_name only at session
+-- start and silently falls back to monitors[0] if the target is missing; the
+-- resolution then changes under the live encoder and the video freezes while input
+-- keeps working.
+hl.monitor({ output = "__OUTPUT__", mode = "__MODE__", position = "__POS__" })

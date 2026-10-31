@@ -1,0 +1,13 @@
+[Unit]
+Description=Switch Hyprland layout to stream-ready around Moonlight sessions (ostreamy)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@HOME@/.local/bin/ostreamy-watch
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=graphical-session.target

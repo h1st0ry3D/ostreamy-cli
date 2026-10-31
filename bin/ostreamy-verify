@@ -1,0 +1,143 @@
+#!/bin/bash
+# Verify the Sunshine/Moonlight stream host.
+#
+#   ostreamy-verify                 checks only
+#   ostreamy-verify --simulate-off  also disable the panel, screenshot STREAM,
+#                                   check the frame is not black, restore
+#
+# Exit code 0 = PASS.
+
+set -uo pipefail
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+for cand in "$SELF_DIR/../lib/ostreamy/common.sh" "$SELF_DIR/common.sh"; do
+  # shellcheck disable=SC1090
+  [ -f "$cand" ] && { . "$cand"; break; }
+done
+
+
+simulate=0
+[ "${1:-}" = "--simulate-off" ] && simulate=1
+
+fail=0
+ok()   { printf 'OK   %s\n' "$1"; }
+bad()  { printf 'FAIL %s\n' "$1"; fail=1; }
+info() { printf 'INFO %s\n' "$1"; }
+
+resolve_sig
+panels=$(monitors | jq -r --arg n "$OUTPUT" '[.[] | select(.name != $n)] | length')
+
+echo "=== prerequisites ==="
+for c in hyprctl jq ss systemctl; do
+  command -v "$c" >/dev/null 2>&1 && ok "$c present" || bad "$c missing"
+done
+command -v sunshine >/dev/null 2>&1 && ok "sunshine installed" || bad "sunshine not installed"
+command -v grim >/dev/null 2>&1 && ok "grim present" || info "grim missing: --simulate-off cannot screenshot"
+
+echo
+echo "=== sunshine service ==="
+systemctl --user is-enabled --quiet sunshine 2>/dev/null && ok "sunshine unit enabled" \
+  || bad "sunshine unit not enabled (will not start at login)"
+systemctl --user is-active --quiet sunshine 2>/dev/null && ok "sunshine unit active" || bad "sunshine unit inactive"
+
+echo
+echo "=== layout ==="
+[ "$panels" -ge 1 ] && ok "$panels physical output(s)" || bad "no physical output"
+exists && ok "$OUTPUT output exists" || bad "$OUTPUT missing: run 'ostreamy ensure'"
+
+if [ "$simulate" -eq 1 ]; then
+  "$(command -v ostreamy || echo "$SELF_DIR/ostreamy")" on >/dev/null 2>&1
+  sleep 2
+fi
+
+monitors_json=$(monitors)
+jq -r '.[] | "     \(.name) \(.width)x\(.height)@\(.refreshRate) at \(.x),\(.y) mirrorOf=\(.mirrorOf) disabled=\(.disabled)"' <<<"$monitors_json"
+
+# Two enabled, non-mirroring outputs at overlapping coordinates make Hyprland warn
+# about an invalid layout and send input to the invisible one.
+overlap=$(jq -r '[.[] | select((.disabled|not) and .mirrorOf=="none")] as $m
+  | if ($m|length) < 2 then "no"
+    else ([range(0; ($m|length)) as $i | range($i+1; ($m|length)) as $j
+           | select(($m[$i].x < ($m[$j].x + $m[$j].width)) and ($m[$j].x < ($m[$i].x + $m[$i].width))
+                    and ($m[$i].y < ($m[$j].y + $m[$j].height)) and ($m[$j].y < ($m[$i].y + $m[$i].height)))]
+          | length > 0) end' <<<"$monitors_json" 2>/dev/null)
+[ "$overlap" = "true" ] && bad "enabled outputs overlap (Hyprland warns; input lands on the wrong output)" \
+  || ok "no overlapping enabled outputs"
+
+ws_on_stream=$(hyprctl workspaces -j 2>/dev/null | jq -r --arg n "$OUTPUT" '[.[] | select(.monitor == $n and .windows > 0)] | length')
+if mirror_active; then
+  ok "stream-ready: panel mirrors $OUTPUT"
+  [ "$ws_on_stream" -gt 0 ] && ok "workspaces with windows on $OUTPUT" \
+    || info "no windows on $OUTPUT yet"
+else
+  ok "native: panel not mirroring"
+  [ "$ws_on_stream" -eq 0 ] && ok "no windows parked on $OUTPUT" \
+    || bad "$ws_on_stream workspace(s) with windows are on $OUTPUT while idle"
+  focus=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
+  [ "$focus" = "$OUTPUT" ] && bad "focus is on $OUTPUT while idle (run 'ostreamy fix')" \
+    || ok "focus on $focus"
+fi
+
+echo
+echo "=== capture target (last Sunshine session) ==="
+if [ -f "$LOG" ]; then
+  grep -aE '\[wayland\] Name:' "$LOG" | tail -1 | sed 's/^/     /'
+  grep -aE '\[wlgrab\] Selected monitor' "$LOG" | tail -1 | sed 's/^/     /'
+  grep -aq "Name: $OUTPUT" "$LOG" && ok "Sunshine selected $OUTPUT" \
+    || info "last session did not select $OUTPUT (normal before the first stream)"
+  dup=$(grep -acE 'Creating encoder' "$LOG")
+  [ "$dup" -le 2 ] && ok "$dup encoder creation(s) in current log" \
+    || info "$dup encoder creations: sessions rebuilt the encoder repeatedly"
+else
+  info "no sunshine.log yet"
+fi
+
+echo
+echo "=== network ==="
+for p in $PORTS; do
+  ss -tuln 2>/dev/null | grep -q ":$p\b" && ok "listening on $p" || bad "nothing listening on $p"
+done
+rules=$(sudo -n ufw status 2>/dev/null || true)
+if [ -z "$rules" ]; then
+  info "ufw needs root: sudo ufw status | grep -E '4798|4801'"
+else
+  miss=0
+  for p in $PORTS; do grep -q "$p" <<<"$rules" || miss=1; done
+  grep -q '47998:48002' <<<"$rules" || miss=1
+  [ "$miss" -eq 0 ] && ok "ufw allows Sunshine ports" || bad "ufw rules missing"
+fi
+
+echo
+echo "=== input ==="
+[ -w /dev/uinput ] && ok "/dev/uinput writable (virtual gamepad)" \
+  || info "/dev/uinput not writable: gamepad passthrough may fail (group input)"
+
+if [ "$simulate" -eq 1 ] && mirror_active; then
+  echo
+  echo "=== simulate panel off ==="
+  panel=$(panel_name)
+  hyprctl eval "hl.monitor({ output = \"$panel\", disabled = true })" >/dev/null 2>&1
+  sleep 3
+  left=$(monitors | jq -r --arg n "$OUTPUT" '.[] | select(.name == $n and (.disabled|not)) | .name')
+  [ "$left" = "$OUTPUT" ] && ok "$panel disabled, $OUTPUT still enabled" || bad "$OUTPUT vanished with the panel"
+  shot=$(mktemp /tmp/ostreamy-off.XXXXXX.png)
+  if grim -o "$OUTPUT" "$shot" 2>/dev/null; then
+    if command -v convert >/dev/null 2>&1; then
+      mean=$(convert "$shot" -colorspace Gray -format '%[fx:mean]' info: 2>/dev/null)
+      echo "     capture: $(identify -format '%wx%h' "$shot" 2>/dev/null) mean=$mean"
+      awk -v m="${mean:-0}" 'BEGIN{exit !(m > 0.001)}' && ok "frame not black" || bad "frame is black"
+    else
+      ok "grim captured $OUTPUT"
+    fi
+  else
+    bad "grim -o $OUTPUT failed"
+  fi
+  rm -f "$shot"
+  hyprctl reload >/dev/null 2>&1
+  sleep 2
+  monitors | jq -e --arg p "$panel" '.[] | select(.name == $p and (.disabled|not))' >/dev/null \
+    && ok "$panel restored" || info "$panel not restored: hyprctl reload"
+fi
+
+echo
+[ "$fail" -eq 0 ] && echo "verdict: PASS" || echo "verdict: FAIL"
+exit "$fail"
