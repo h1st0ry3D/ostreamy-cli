@@ -1,8 +1,8 @@
 # Design notes and evidence
 
 Every rule here exists because a simpler version broke in a specific, observable
-way. Logs are from a Hyprland 0.56.2 / Omarchy 4.0.6 host with an RTX 4070 and a
-Steam Deck OLED client.
+way. Logs are from a host running Hyprland 0.56.2 on Omarchy 4.0.6, with an RTX 4070
+and a Steam Deck OLED client.
 
 ## 1. Capture a headless output, not the panel
 
@@ -23,8 +23,8 @@ First attempt: create `STREAM` on connect, remove it on disconnect. Two failure
 modes, both reproduced:
 
 ```
-Sunshine SIGABRT ×4 (13:59:31, 13:59:42, 13:59:54, 14:00:06)  <- output removed under capture
-Hyprland SIGSEGV (14:00:13) CFocusState::fullWindowFocus <- CWindow::unmapWindow
+Sunshine SIGABRT four times (13:59:31, 13:59:42, 13:59:54, 14:00:06)  # output removed under capture
+Hyprland SIGSEGV (14:00:13) CFocusState::fullWindowFocus on CWindow::unmapWindow
                               std::__throw_bad_variant_access
 ```
 
@@ -33,15 +33,15 @@ Sunshine resolves `output_name` **once, at session start**, and falls back to
 `monitors[0]` when the target is missing:
 
 ```
-14:34:49.487 Resolution: 2560x1440     <- session started on the panel
+14:34:49.487 Resolution: 2560x1440     # session started on the panel
 14:34:51.729 Error: Couldn't import RGB Image: 0000300C
-14:34:51.812 Resolution: 1920x1200     <- output changed under the live encoder
+14:34:51.812 Resolution: 1920x1200     # output changed under the live encoder
 14:34:51.833 Creating encoder [hevc_nvenc]
 ```
 
-Symptom: video freezes after a few seconds while the controller keeps working —
-input is a separate channel and never noticed. Conclusion: the capture target and its
-mode are constants. Only the layout changes.
+Symptom: video freezes after a few seconds while the controller keeps working.
+Input is a separate channel, so it does not notice. The conclusion is that the
+capture target and its mode must stay constant. Only the layout changes.
 
 ## 3. The output must never overlap the primary
 
@@ -84,28 +84,31 @@ Final rules:
 
 | Signal | Meaning | Use |
 |---|---|---|
-| `ESTAB`/`CLOSE-WAIT`/`SYN` on Sunshine ports | live session | keep layout armed, re-assert mirror |
+| `ESTAB`, `CLOSE-WAIT` or `SYN` on Sunshine ports | live session | keep layout armed, re-assert mirror |
 | a **new** remote endpoint on those ports | a fresh client | trigger switch-on |
-| `CLIENT DISCONNECTED` in `sunshine.log` | session ended | switch back (≈0.22 s) |
+| `CLIENT DISCONNECTED` in `sunshine.log` | session ended | switch back (about 0.22 s) |
 | native layout + nothing live | deliberate manual `off` | standby, do not re-arm |
 
-Novelty is the key: the watcher keeps a snapshot of client endpoints and switches on
-only when one appears that was not in the snapshot. Novelty alone is not enough: when
-the Deck quits a stream it keeps polling its host list, which creates *new* short-lived
-connections and re-armed the layout two seconds after the session ended. A 20 s quiet
-window after every switch-off ignores those polls; a live connection or
-"New streaming session started" still arms immediately, so a real session is never
-delayed. A leftover `TIME-WAIT` from the
-session that just ended is already in the snapshot, so it can never re-arm the
-layout — which is what a count-based rule (and a cooldown) failed to guarantee.
-Endpoints are normalised to the client end: inbound connections have the client in
-the peer column, while a local test connection has it in the local column.
+The watcher keeps a snapshot of client endpoints and switches on when one appears
+that was not in the snapshot. A count of sockets alone cannot do this. A leftover
+`TIME-WAIT` from a session that ended is already in the snapshot, so it cannot
+re-arm the layout.
+
+New endpoints alone were not enough either. When the Deck quits a stream it keeps
+polling its host list. Those polls create new short-lived connections, and they
+re-armed the layout two seconds after the session ended. A 20 s quiet window after
+a switch-off that came from a session end ignores them. A manual `ostreamy off`
+opens no window, because the next real client has to arm immediately. A live
+connection or a `New streaming session started` line always arms.
+
+Endpoints are normalised to the client end. Inbound connections carry the client in
+the peer column; a local test connection carries it in the local column.
 
 ## 6. Safety net for a late switch
 
 If `New streaming session started` appears while the layout is still native, the
-watcher switches the layout and restarts Sunshine: better a short hiccup than a
-permanently frozen frame captured from an empty output.
+watcher switches the layout and restarts Sunshine. The restart costs about two
+seconds; a frozen frame needs a reconnect anyway.
 
 ## 7. Workspace ids are numbers
 
@@ -134,7 +137,7 @@ the live instance from `hyprctl instances` instead of trusting the environment.
 
 While the panel mirrors a 16:10 output it reports that output's size. Deriving the
 "restore" mode from the panel's current resolution therefore restores the Deck's
-resolution (1920x1200) instead of the monitor's (2560x1440@144). ostreamy picks the
+resolution (1920x1200) instead of the monitor's (2560x1440@144). Ostreamy picks the
 panel's largest available mode and the highest refresh within it, so the result does
 not depend on whether a mirror is active.
 
@@ -144,7 +147,7 @@ Both directions used to overlap for a moment:
 
 | step | `on` | `off` |
 |---|---|---|
-| 1 | ensure output exists (parked, negative x) | disable nothing — reload clears the mirror |
+| 1 | ensure output exists (parked, negative x) | disable nothing; reload clears the mirror |
 | 2 | move workspaces onto `STREAM` | move workspaces back to the panel |
 | 3 | apply the mirror | focus a workspace that has windows |
 | 4 | re-apply the mirror | `ostreamy fix` if focus is still on `STREAM` |

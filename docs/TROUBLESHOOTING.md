@@ -36,10 +36,10 @@ An invisible output holds focus or overlaps the primary.
 
 ```bash
 ostreamy status          # look for STREAM at 0,0 or focused
-ostreamy fix             # move workspaces + focus to the panel
+ostreamy fix             # move workspaces and focus to the panel
 ```
 
-If `STREAM` sits at the same coordinates as the panel, re-run `./install.sh` — the
+If `STREAM` sits at the same coordinates as the panel, re-run `./install.sh`. The
 shipped snippet parks it at a negative x.
 
 ## Resolution stays at the Deck's after quitting Moonlight
@@ -51,11 +51,12 @@ did not switch back. Check:
 journalctl --user -u ostreamy-watch -n 20
 ```
 
-You want `Sunshine reported disconnect -> native layout` (≈0.2 s) or
+You want `Sunshine reported disconnect -> native layout` (about 0.2 s) or
 `no live client for 30s -> native layout`. If neither appears, `stream-ready` is being
-re-armed by Moonlight's menu polling — versions before the quiet window did exactly
-that. Current behaviour: the first switch-off starts a 20 s quiet window, polls inside
-it are ignored, a real session still arms immediately.
+re-armed by Moonlight's menu polling. Versions before the quiet window did exactly
+that. Current behaviour: a switch-off caused by a session end starts a 20 s quiet
+window; polls inside it are ignored, a real session still arms immediately. A manual
+`ostreamy off` opens no window, so the next connection arms at once.
 
 ## `off` does not restore the desktop mode
 
@@ -63,7 +64,7 @@ Leftover `TIME-WAIT` sockets used to re-arm the layout. Check:
 
 ```bash
 ostreamy status
-journalctl --user -u ostreamy-watch -n 20 --no-cache 2>/dev/null || journalctl --user -u ostreamy-watch -n 20
+journalctl --user -u ostreamy-watch -n 20 --no-pager
 ```
 
 You want `layout switched off externally -> standby` right after a manual `off`.
@@ -80,7 +81,7 @@ hyprctl monitors all -j | jq -r '.[] | "\(.name) \(.x),\(.y) \(.width)x\(.height
 ostreamy ensure
 ```
 
-## Desktop returns squashed / stuck at stream resolution
+## Desktop returns squashed or stuck at stream resolution
 
 The panel is still mirroring the 16:10 stream.
 
@@ -110,9 +111,9 @@ sudo ufw status | grep -E '4798|4799|4801'
 
 Add the LAN-scoped rules from `README.md`.
 
-## Picture is soft / blocky
+## Picture is soft or blocky
 
-Client-side bitrate. A session at 9–10 Mbps looks soft at 1200p; use 40–50 Mbps on
+Client-side bitrate. A session at 9 to 10 Mbps looks soft at 1200p; use 40 to 50 Mbps on
 LAN. Check what was negotiated:
 
 ```bash
@@ -126,7 +127,7 @@ cannot hardware-decode.
 
 ## `hyprctl` fails with "Couldn't connect to .../.socket.sock"
 
-Stale `HYPRLAND_INSTANCE_SIGNATURE` after a compositor restart. ostreamy resolves it
+Stale `HYPRLAND_INSTANCE_SIGNATURE` after a compositor restart. Ostreamy resolves it
 automatically; if you hit this in your own shell:
 
 ```bash
@@ -151,4 +152,4 @@ journalctl --user -u ostreamy-watch -n 30
 
 It should log `watching Moonlight activity (poll 0.25s ...)` at start. No
 `client connected` line while you stream means the port list or socket detection is
-wrong — report the `ss -Htan | grep -E ':(47984|47989|48010)'` output.
+wrong. Report the `ss -Htan | grep -E ':(47984|47989|48010)'` output.

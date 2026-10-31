@@ -1,20 +1,24 @@
-# Steam Deck / Moonlight client notes
+# Steam Deck and Moonlight client notes
 
 ## Pairing
 
 1. Install Moonlight on the Deck (Flatpak or Discover).
 2. It should find the host over mDNS; otherwise add it by IP.
-3. Moonlight shows a 4-digit PIN. Enter it at `https://<host-ip>:47990`
-   (Sunshine Web UI → PIN).
+3. Moonlight shows a 4-digit PIN. Enter it in the Sunshine Web UI at
+   `https://<host-ip>:47990`, on the PIN page.
 
 ## Settings
+
+The host streams the mode configured on the headless output, so the client
+resolution below only controls the image it receives and scales. Keep the client at
+the panel's native size.
 
 | Setting | Value | Why |
 |---|---|---|
 | Resolution | 1280x800 | panel native; avoids an extra scale |
-| FPS | 90 (OLED) / 60 (LCD) | matches the panel |
+| FPS | 90 on OLED, 60 on LCD | matches the panel |
 | Codec | HEVC | best quality per bit that the Deck decodes in hardware |
-| Bitrate | 40–50 Mbps LAN, 25–30 weak Wi-Fi | at 1200p, 10 Mbps looks soft |
+| Bitrate | 40 to 50 Mbps LAN, 25 to 30 weak Wi-Fi | at 1200p, 10 Mbps looks soft |
 | Hardware decoding | on | VCN handles HEVC 10-bit |
 | V-Sync | on | removes tearing inside the stream |
 | Frame pacing | on | smooths 60 fps content on a 90 Hz panel |
@@ -28,15 +32,15 @@ NVENC has no VP9 encoder.
 
 ## Odds and ends
 
-- The host mirrors the headless output to its own monitor while you play, so the
-  physical screen shows the same picture (vertically squashed, 16:10 → 16:9).
+- While you play, the host mirrors the headless output to its own monitor, so the
+  physical screen shows the same picture, squashed from 16:10 into 16:9.
   `ostreamy off` restores the native desktop when you are done.
 - Controller passthrough needs `/dev/uinput` (group `input`); ostreamy-verify checks
   it.
 - Audio is captured from a temporary `sink-sunshine-stereo` sink and the host's sink
   is restored after the stream.
-- Host bitrate ceiling is 0 (client decides). Only set `max_bitrate` if you must cap
-  a client.
+- The host sets no bitrate ceiling; the client chooses. Set `max_bitrate` only when a
+  client has to be capped.
 
 ## Launch options (optional)
 
