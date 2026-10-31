@@ -1,5 +1,5 @@
 #!/bin/bash
-# Remove ostreamy's runtime pieces. Leaves your config and Sunshine's config alone
+# Remove Ostreamy's runtime pieces. Leaves your config and Sunshine's config alone
 # unless --purge is given.
 set -euo pipefail
 
@@ -33,8 +33,12 @@ strip_block() {
   esac
   [ -f "$file" ] || return 0
   grep -qF "$b" "$file" || return 0
-  cp "$file" "$file.bak.$(date +%s)"
-  latest=$(ls -t "$file".bak.* | head -1)
+  if ! cp "$file" "$file.bak.$(date +%s)"; then
+    say FAIL "could not back up $file, leaving it untouched"
+    return 1
+  fi
+  latest=$(ls -t "$file".bak.* 2>/dev/null | head -1)
+  [ -n "$latest" ] || { say FAIL "no backup for $file, leaving it untouched"; return 1; }
   tmp=$(mktemp)
   awk -v b="$b" -v e="$e" '
     $0 == b {skip=1; next}

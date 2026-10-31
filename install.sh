@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install ostreamy: a stream-ready Hyprland layout for Sunshine + Moonlight.
+# Install Ostreamy: a stream-ready Hyprland layout for Sunshine + Moonlight.
 # Idempotent: safe to re-run after Hyprland/Sunshine updates.
 #
 #   ./install.sh                 install scripts, unit, config, Hyprland snippet
@@ -21,8 +21,6 @@ MARK_BEGIN_LUA="-- >>> ostreamy >>>"
 MARK_END_LUA="-- <<< ostreamy <<<"
 MARK_BEGIN_INI="# >>> ostreamy >>>"
 MARK_END_INI="# <<< ostreamy <<<"
-MARK_BEGIN="$MARK_BEGIN_INI"
-MARK_END="$MARK_END_INI"
 
 do_hypr=1
 do_sunshine=1
@@ -133,7 +131,7 @@ if [ "$do_sunshine" -eq 1 ]; then
   case "$encoder" in
     auto)
       if command -v nvidia-smi >/dev/null 2>&1; then encoder=nvenc
-      elif [ -d /dev/dri ]; then encoder=vaapi
+      elif ls /dev/dri/renderD* >/dev/null 2>&1; then encoder=vaapi
       else encoder=software; fi ;;
   esac
   if grep -qF "$MARK_BEGIN_INI" "$SUNSHINE_CONF"; then
@@ -145,7 +143,9 @@ if [ "$do_sunshine" -eq 1 ]; then
       printf 'output_name = STREAM\n'
       printf 'encoder = %s\n' "$encoder"
       printf '# AV1 must stay unadvertised: Steam Deck has no AV1 hardware decoder.\n'
-      grep -q '^av1_mode' "$SUNSHINE_CONF" || printf 'av1_mode = 1\n'
+      # Only add it when the file has no explicit setting; a duplicate key would be
+      # ambiguous to the next reader.
+      grep -qE '^[[:space:]]*av1_mode[[:space:]]*=' "$SUNSHINE_CONF" || printf 'av1_mode = 1\n'
       printf '%s\n' "$MARK_END_INI"
     } >> "$SUNSHINE_CONF"
     say SET "sunshine.conf: output_name=STREAM, encoder=$encoder"

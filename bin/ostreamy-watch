@@ -53,6 +53,10 @@ while :; do
       activated=1
       last_live=$now
       log_offset=$(log_size)
+      # Settle: the connection that armed us can still be entering TIME-WAIT, so
+      # its endpoint may land after this poll's snapshot. Ignore novelty briefly, or
+      # that same client counts as "new" and re-arms a manual `off`.
+      quiet_until=$((now + 2))
     elif [ "$session_started" -eq 1 ]; then
       # Session began while the layout was idle: Sunshine is capturing an empty
       # STREAM and will deliver one stale frame. Switch and rebuild the capture.
@@ -63,8 +67,10 @@ while :; do
       last_live=$now
       log_offset=$(log_size)
     else
+      # Do not fight a deliberate `ostreamy on`: only a *native* layout should
+      # have focus on the panel.
       focused=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
-      if [ "$focused" = "$OUTPUT" ]; then
+      if [ "$focused" = "$OUTPUT" ] && ! mirror_active; then
         log "focus left on $OUTPUT while idle -> restoring panel"
         "$OSTREAMY" fix >/dev/null 2>&1 || true
       fi
@@ -83,9 +89,13 @@ while :; do
         "$OSTREAMY" mirror >/dev/null 2>&1 || true
       fi
     elif ! mirror_active; then
+      # A manual `ostreamy off` asks for the desktop. Treat the next QUIET seconds
+      # like a session end: leftover sockets must not re-arm it. A live connection
+      # or "New streaming session started" still arms immediately.
       log "layout switched off externally -> standby"
       activated=0
       quiet_until=$((now + QUIET))
+      remember_endpoints
     elif [ $((now - last_live)) -ge "$GRACE" ]; then
       log "no live client for ${GRACE}s -> native layout"
       "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"

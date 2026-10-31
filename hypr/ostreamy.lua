@@ -1,8 +1,8 @@
--- ostreamy: persistent headless output captured by Sunshine.
+-- Ostreamy: persistent headless output captured by Sunshine.
 --
--- Inserted by install.sh between "# >>> ostreamy >>>" markers, and removed again by
+-- Inserted by install.sh between "# >>> Ostreamy >>>" markers, and removed again by
 -- uninstall.sh. Keep this block free of mirror settings: a runtime mirror cannot be
--- cleared by re-applying a rule, so ostreamy switches the mirror at runtime with
+-- cleared by re-applying a rule, so Ostreamy switches the mirror at runtime with
 -- `hyprctl eval` and clears it with `hyprctl reload` (which lands here, mirror-free).
 --
 -- The output is parked at a negative x so it can never overlap the primary output:

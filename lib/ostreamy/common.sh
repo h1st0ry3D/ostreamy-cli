@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared helpers for ostreamy. Source this after SELF_DIR is set.
+# Shared helpers for Ostreamy. Source this after SELF_DIR is set.
 #
 # Layout model: STREAM is a persistent headless output that Sunshine captures. It
 # is never created/destroyed/enabled/disabled at runtime, because Sunshine resolves
@@ -162,10 +162,6 @@ port_filter() {
   printf '%s' "$expr"
 }
 
-client_connections() {
-  ss -Htan 2>/dev/null | grep -E "$(port_filter)" | grep -vE 'LISTEN|127\.0\.0\.1|\[::1\]' | wc -l
-}
-
 # Identify the *client* end. For an inbound connection the peer is the client; for a
 # local test connection the peer is our own listening port, so the local endpoint is
 # the client side instead. Normalising both keeps novelty detection honest.
@@ -182,7 +178,7 @@ client_endpoints() {
 }
 
 # A brand-new client raises the endpoint set; TIME-WAIT leftovers from a closed one
-# do not, which is what makes a manual `off` stick.
+# do not, so a manual `off` stays off.
 new_endpoints() {
   local current
   current=$(client_endpoints)
@@ -195,6 +191,20 @@ remember_endpoints() { client_endpoints > "$SEEN_FILE" 2>/dev/null || true; }
 
 # Sunshine's own log is the only reliable "session ended"/"session started" signal.
 log_size() { stat -c %s "$LOG" 2>/dev/null || echo 0; }
+
+# True when Sunshine has a session running, judged from live sockets or from the
+# last session-start line being newer than the last disconnect line. Changing the
+# capture mode mid-session rebuilds the encoder and stalls the video.
+session_live() {
+  [ "$(live_connections)" -gt 0 ] && return 0
+  [ -f "$LOG" ] || return 1
+  local start end
+  start=$(grep -an 'New streaming session started' "$LOG" 2>/dev/null | tail -1 | cut -d: -f1)
+  end=$(grep -anE 'CLIENT DISCONNECTED|Streaming session ended' "$LOG" 2>/dev/null | tail -1 | cut -d: -f1)
+  [ -n "$start" ] || return 1
+  [ -z "$end" ] && return 0
+  [ "$start" -gt "$end" ]
+}
 
 log_since() {
   local offset="$1" pattern="$2" size

@@ -1,12 +1,13 @@
-# ostreamy configuration. Sourced by every ostreamy command; plain bash.
+# Ostreamy configuration. Sourced by every Ostreamy command; plain bash.
 
 # Name of the persistent headless output that Sunshine captures.
 # Must match `output_name` in ~/.config/sunshine/sunshine.conf.
 OUTPUT=STREAM
 
-# Mode of that headless output. 16:10 (1200p/1600p) fills a Steam Deck OLED panel
-# exactly; 1440p gives a 16:9 image with 40 px bars top/bottom on the Deck but a
-# pixel-perfect picture on a 1440p desktop monitor.
+# Mode of that headless output, WIDTHxHEIGHT@HZ. 16:10 (1200p, 1600p) fills a Steam
+# Deck OLED panel exactly; 1440p gives a 16:9 image with 40 px bars top and bottom on
+# the Deck but a pixel-perfect picture on a 1440p desktop monitor. Change it with
+# `ostreamy mode 1920x1200@90`; that also updates the Hyprland rule.
 MODE=1920x1200@60
 
 # Fallback: seconds without a live client before the layout goes back to native,

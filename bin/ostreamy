@@ -1,12 +1,13 @@
 #!/bin/bash
-# ostreamy - switch the Hyprland layout between desktop and Sunshine-stream ready.
+# Ostreamy - switch the Hyprland layout between desktop and Sunshine-stream ready.
 #
-#   ostreamy ensure          create STREAM if missing, pin its mode, park it
-#   ostreamy on              stream-ready: move workspaces to STREAM, mirror panel
-#   ostreamy off             native: unmirror, workspaces back, focus panel
-#   ostreamy mirror          re-apply only the mirror (safe mid-session)
-#   ostreamy fix             pull workspaces/focus back to the panel
-#   ostreamy status          print the current layout
+#   Ostreamy ensure          create STREAM if missing, pin its mode, park it
+#   Ostreamy on              stream-ready: move workspaces to STREAM, mirror panel
+#   Ostreamy off             native: unmirror, workspaces back, focus panel
+#   Ostreamy mirror          re-apply only the mirror (safe mid-session)
+#   Ostreamy fix             pull workspaces/focus back to the panel
+#   Ostreamy mode WxH[@Hz]   change the captured resolution/refresh and save it
+#   Ostreamy status          print the current layout
 #
 # STREAM itself is never created/destroyed/enabled/disabled while Sunshine runs.
 
@@ -42,6 +43,7 @@ full_switch_off() {
   move_workspaces "$OUTPUT" "$name"
   rescue_orphans "$name"
   apply_panel_rule plain
+  sync_hypr_mode
   ensure_output >/dev/null 2>&1 || true
   focus_a_windowed_workspace
   # Authoritative: if a concurrent switch-on raced us, clear it again.
@@ -55,7 +57,95 @@ full_switch_off() {
   done
 }
 
+CONF=${OSTREAMY_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/ostreamy/config.sh}
+HYPR_CONF=${HYPR_CONF:-$HOME/.config/hypr/monitors.lua}
+MARK_BEGIN="-- >>> ostreamy >>>"
+MARK_END="-- <<< ostreamy <<<"
+
+save_mode() {
+  mkdir -p "$(dirname "$CONF")"
+  if grep -q '^MODE=' "$CONF" 2>/dev/null; then
+    sed -i "s|^MODE=.*|MODE=$1|" "$CONF"
+  else
+    printf 'MODE=%s\n' "$1" >> "$CONF"
+  fi
+  MODE=$1
+}
+
+# The Hyprland rule is what recreates STREAM at the right size after a restart, so
+# it has to match the config. Only the managed block is touched.
+sync_hypr_mode() {
+  local width pos tmp
+  [ -f "$HYPR_CONF" ] || return 0
+  grep -qF -- "$MARK_BEGIN" "$HYPR_CONF" || return 0
+  width=${MODE%%x*}; pos="-${width}x0"
+  tmp=$(mktemp)
+  awk -v b="$MARK_BEGIN" -v e="$MARK_END" \
+      -v rule="hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$pos\" })" \
+      -v pat="hl.monitor({ output = \"$OUTPUT\"" '
+    $0 == b { inside = 1; print; next }
+    $0 == e { inside = 0; print; next }
+    inside && index($0, pat) == 1 { print rule; next }
+    { print }
+  ' "$HYPR_CONF" > "$tmp" && mv "$tmp" "$HYPR_CONF"
+}
+
+set_mode() {
+  local req mode hz
+  req=${1:-}
+  if ! printf '%s' "$req" | grep -qE '^[0-9]+x[0-9]+(@[0-9]+)?$'; then
+    printf 'usage: %s mode <width>x<height>[@<hz>]   e.g. 1920x1200@90\n' "${0##*/}" >&2
+    return 2
+  fi
+  case "$req" in
+    *@*) mode=$req ;;
+    *)   mode="$req@60" ;;
+  esac
+  # Check before touching monitors.lua: saving that file makes Hyprland reload,
+  # and a reload drops the runtime mirror, which would hide an active stream.
+  if mirror_active || session_live; then
+    save_mode "$mode"
+    printf 'saved %s; it applies after the stream ends (or run ostreamy ensure)\n' "$mode"
+    return 0
+  fi
+  save_mode "$mode"
+  sync_hypr_mode
+  hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$mode\", position = \"$(park_position)\" })" >/dev/null 2>&1 || true
+  printf 'stream mode set to %s\n' "$mode"
+}
+
+# Machine-readable state for the Omarchy shell plugin.
+state() {
+  local streaming=false w h fps
+  mirror_active && streaming=true
+  w=${MODE%%x*}
+  h=${MODE#*x}; h=${h%@*}
+  fps=${MODE#*@}; [ "$fps" = "$MODE" ] && fps=60
+  jq -n --arg mode "$MODE" --arg output "$OUTPUT" --arg panel "$(panel_name)" \
+        --argjson streaming "$streaming" --argjson width "${w:-0}" \
+        --argjson height "${h:-0}" --argjson fps "${fps:-60}" \
+        '{mode:$mode, output:$output, panel:$panel, streaming:$streaming, width:$width, height:$height, fps:$fps}'
+}
+
+# Open the config in whatever the user's desktop uses. Falls back to a terminal
+# editor when there is no handler, which is the common case on a minimal Wayland
+# session.
+edit_config() {
+  local editor
+  editor=${VISUAL:-${EDITOR:-}}
+  if command -v xdg-open >/dev/null 2>&1 && xdg-open "$CONF" >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v foot >/dev/null 2>&1; then
+    foot -e "${editor:-nvim}" "$CONF" >/dev/null 2>&1 &
+    return 0
+  fi
+  printf 'No editor found. Set VISUAL or EDITOR, or install foot.\n' >&2
+  return 1
+}
+
 status() {
+  printf 'configured mode: %s\n' "$MODE"
   printf 'output: %s (%s)\n' "$OUTPUT" "$(exists && echo present || echo MISSING)"
   monitors | jq -r '.[] | "\(.name) \(.width)x\(.height)@\(.refreshRate) at \(.x),\(.y) mirrorOf=\(.mirrorOf) disabled=\(.disabled)"'
   hyprctl workspaces -j 2>/dev/null | jq -r '.[] | "ws \(.id) -> \(.monitor) (\(.windows) windows)"'
@@ -65,14 +155,17 @@ resolve_sig
 [ -z "$(panel_name)" ] && { echo "no physical output found; is Hyprland running?" >&2; exit 1; }
 
 case "${1:-status}" in
-  ensure)  ensure_output >/dev/null 2>&1; status ;;
+  ensure)  ensure_output >/dev/null 2>&1; sync_hypr_mode; status ;;
   on)      full_switch_on;  status ;;
   off)     full_switch_off; status ;;
   mirror)  apply_panel_rule mirror ;;
   fix)     move_workspaces "$OUTPUT" "$(panel_name)"; focus_a_windowed_workspace ;;
+  mode)    set_mode "${2:-}" ;;
+  state)   state ;;
+  edit)    edit_config ;;
   status)  status ;;
   *)
-    printf 'usage: %s {ensure|on|off|mirror|fix|status}\n' "${0##*/}" >&2
+    printf 'usage: %s {ensure|on|off|mirror|fix|mode WxH[@Hz]|state|edit|status}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac
