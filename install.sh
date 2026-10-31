@@ -88,35 +88,49 @@ fi
 
 # --- Hyprland snippet -------------------------------------------------------
 if [ "$do_hypr" -eq 1 ]; then
-  if [ -f "$HYPR_CONF" ] && grep -qF "$MARK_BEGIN_LUA" "$HYPR_CONF"; then
-    say OK "hyprland snippet already present in $HYPR_CONF"
-  elif [ -f "$HYPR_CONF" ]; then
-    cp "$HYPR_CONF" "$HYPR_CONF.bak.$(date +%s)"
-    # Migrate a block written with INI markers by an older installer: `#` is not a
-    # Lua comment and makes the whole config fail to load.
-    if grep -qF "$MARK_BEGIN_INI" "$HYPR_CONF"; then
-      tmp=$(mktemp)
-      awk -v b="$MARK_BEGIN_INI" -v e="$MARK_END_INI" '
-        $0 == b {skip=1; next}
-        $0 == e {skip=0; next}
-        !skip {print}
-      ' "$HYPR_CONF" > "$tmp"
-      mv "$tmp" "$HYPR_CONF"
-      say INFO "migrated legacy # markers out of $HYPR_CONF"
-    fi
+  if [ -f "$HYPR_CONF" ]; then
     # shellcheck disable=SC1090
     . "$CONF"
     mode="${MODE:-1920x1200@60}"
     width="${mode%%x*}"
     pos="-${width}x0"
+
+    # Strip every existing block, in either marker style, then append one fresh
+    # block. This migrates the old `#` markers and collapses duplicates left by
+    # the previous check: a pattern starting with `--` was read as grep options,
+    # so "already present" never matched and every run appended another copy.
+    stripped=$(mktemp)
+    merged=$(mktemp)
+    awk -v b1="$MARK_BEGIN_LUA" -v e1="$MARK_END_LUA" \
+        -v b2="$MARK_BEGIN_INI" -v e2="$MARK_END_INI" '
+      $0 == b1 || $0 == b2 {skip=1; next}
+      $0 == e1 || $0 == e2 {skip=0; next}
+      !skip {print}
+    ' "$HYPR_CONF" > "$stripped"
+
     {
+      # Drop trailing blank lines before re-adding the separator, so repeated runs
+      # produce byte-identical files instead of growing a blank line each time.
+      awk '
+        /^[[:space:]]*$/ { blanks++; next }
+        { while (blanks > 0) { print ""; blanks-- } print }
+      ' "$stripped"
       printf '\n%s\n' "$MARK_BEGIN_LUA"
       # The template already has "--" comments; code lines must stay live.
       sed -e "s|__MODE__|$mode|g" -e "s|__POS__|$pos|g" \
           -e "s|__OUTPUT__|${OUTPUT:-STREAM}|g" "$REPO/hypr/ostreamy.lua"
       printf '%s\n' "$MARK_END_LUA"
-    } >> "$HYPR_CONF"
-    say SET "appended snippet to $HYPR_CONF (backup kept)"
+    } > "$merged"
+    rm -f "$stripped"
+
+    if cmp -s "$merged" "$HYPR_CONF"; then
+      rm -f "$merged"
+      say OK "hyprland snippet unchanged in $HYPR_CONF"
+    else
+      cp "$HYPR_CONF" "$HYPR_CONF.bak.$(date +%s)"
+      mv "$merged" "$HYPR_CONF"
+      say SET "wrote hyprland snippet to $HYPR_CONF (backup kept)"
+    fi
   else
     say WARN "$HYPR_CONF not found: add hypr/ostreamy.lua manually"
   fi
@@ -134,7 +148,8 @@ if [ "$do_sunshine" -eq 1 ]; then
       elif ls /dev/dri/renderD* >/dev/null 2>&1; then encoder=vaapi
       else encoder=software; fi ;;
   esac
-  if grep -qF "$MARK_BEGIN_INI" "$SUNSHINE_CONF"; then
+  sunshine_changed=0
+  if grep -qF -- "$MARK_BEGIN_INI" "$SUNSHINE_CONF"; then
     say OK "sunshine snippet already present"
   else
     cp "$SUNSHINE_CONF" "$SUNSHINE_CONF.bak.$(date +%s)" 2>/dev/null || true
@@ -148,9 +163,15 @@ if [ "$do_sunshine" -eq 1 ]; then
       grep -qE '^[[:space:]]*av1_mode[[:space:]]*=' "$SUNSHINE_CONF" || printf 'av1_mode = 1\n'
       printf '%s\n' "$MARK_END_INI"
     } >> "$SUNSHINE_CONF"
+    sunshine_changed=1
     say SET "sunshine.conf: output_name=STREAM, encoder=$encoder"
   fi
-  systemctl --user restart sunshine >/dev/null 2>&1 || say WARN "could not restart sunshine"
+  # Restart only when the file changed. The packaged unit allows five starts per
+  # 500 s, so restarting on every install run ends in start-limit-hit and a dead
+  # streaming host.
+  if [ "$sunshine_changed" -eq 1 ]; then
+    systemctl --user restart sunshine >/dev/null 2>&1 || say WARN "could not restart sunshine"
+  fi
 fi
 
 # --- firewall ---------------------------------------------------------------

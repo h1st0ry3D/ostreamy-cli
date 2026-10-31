@@ -32,7 +32,7 @@ strip_block() {
     *)     b="$MARK_BEGIN_INI"; e="$MARK_END_INI" ;;
   esac
   [ -f "$file" ] || return 0
-  grep -qF "$b" "$file" || return 0
+  grep -qF -- "$b" "$file" || return 0
   if ! cp "$file" "$file.bak.$(date +%s)"; then
     say FAIL "could not back up $file, leaving it untouched"
     return 1
