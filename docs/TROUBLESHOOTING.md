@@ -64,10 +64,12 @@ did not switch back. Check:
 journalctl --user -u ostreamy-watch -n 20
 ```
 
-You want `Sunshine reported disconnect -> native layout` (about 0.2 s) or
-`no live client for 30s -> native layout`. If neither appears, `stream-ready` is being
+You want `Sunshine reported disconnect -> native layout` (about 0.2 s), or
+`Sunshine is not running -> native layout`. If neither appears, `stream-ready` is being
 re-armed by Moonlight's menu polling. Versions before the quiet window did exactly
-that. Current behaviour: a switch-off caused by a session end starts a 20 s quiet
+that. A session is never disarmed by a quiet socket table: Moonlight's control
+connections close right after launch, so the watcher ends a session only when
+Sunshine logs it. Current behaviour: a switch-off caused by a session end starts a 20 s quiet
 window; polls inside it are ignored, a real session still arms immediately. A manual
 `ostreamy off` opens no window, so the next connection arms at once.
 

@@ -5,9 +5,13 @@
 #   on  - a live connection (ESTAB/CLOSE-WAIT/SYN) on Sunshine's ports, a *new*
 #         remote endpoint appearing (a fresh client), or "New streaming session
 #         started" in sunshine.log
-#   off - "CLIENT DISCONNECTED"/"Streaming session ended" in sunshine.log, or no
-#         live connection for GRACE seconds, or the layout being switched off
-#         externally while nothing is live (manual `ostreamy off`)
+#   off - "CLIENT DISCONNECTED"/"Streaming session ended" in sunshine.log,
+#         Sunshine stopping, or a manual `ostreamy off`
+#
+# Live sockets are not a session signal: Moonlight's control connections close
+# right after an app launches, so a real session spends most of its time with no
+# live socket. The layout is therefore disarmed by Sunshine's own log, never by a
+# quiet socket table.
 
 set -u
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -22,10 +26,11 @@ log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 resolve_sig
 "$OSTREAMY" ensure >/dev/null 2>&1 || true
-log "watching Moonlight activity (poll ${INTERVAL}s, grace ${GRACE}s)"
+log "watching Moonlight activity (poll ${INTERVAL}s, quiet ${QUIET}s)"
 
 activated=0
-last_live=0
+activated_at=0
+drift_since=0
 quiet_until=0
 log_offset=$(log_size)
 scan_offset=$log_offset
@@ -51,7 +56,8 @@ while :; do
       log "client connected -> stream-ready layout"
       "$OSTREAMY" on >/dev/null 2>&1 || log "layout switch failed"
       activated=1
-      last_live=$now
+      activated_at=$now
+      drift_since=0
       log_offset=$(log_size)
       # Settle: the connection that armed us can still be entering TIME-WAIT, so
       # its endpoint may land after this poll's snapshot. Ignore novelty briefly, or
@@ -64,7 +70,8 @@ while :; do
       "$OSTREAMY" on >/dev/null 2>&1 || true
       systemctl --user restart sunshine >/dev/null 2>&1 || true
       activated=1
-      last_live=$now
+      activated_at=$now
+      drift_since=0
       log_offset=$(log_size)
     else
       # Do not fight a deliberate `ostreamy on`: only a *native* layout should
@@ -76,36 +83,41 @@ while :; do
       fi
     fi
   else
-    [ "$live" -gt 0 ] && last_live=$now
-
     if log_since "$log_offset" 'CLIENT DISCONNECTED|Streaming session ended'; then
       log "Sunshine reported disconnect -> native layout"
-      "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
+      OSTREAMY_INTERNAL=1 "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
       activated=0
       quiet_until=$((now + QUIET))
-    elif [ "$live" -gt 0 ]; then
-      # Recover when the mirror is gone or a window ended up on the panel. The
-      # earlier rule only re-applied the mirror, so a window (Steam Big Picture)
-      # that opened on the panel stayed there for the whole session.
-      if ! mirror_active || [ "$(windows_on_panel)" -gt 0 ]; then
-        log "stream layout drifted -> moving windows back to $OUTPUT"
-        "$OSTREAMY" recover >/dev/null 2>&1 || true
-      fi
-    elif ! mirror_active; then
-      # A manual `ostreamy off` asks for the desktop. Treat the next QUIET seconds
-      # like a session end: leftover sockets must not re-arm it. A live connection
-      # or "New streaming session started" still arms immediately.
+      drift_since=0
+    elif ! systemctl --user is-active --quiet sunshine 2>/dev/null; then
+      log "Sunshine is not running -> native layout"
+      OSTREAMY_INTERNAL=1 "$OSTREAMY" off >/dev/null 2>&1 || true
+      activated=0
+      quiet_until=$((now + QUIET))
+      drift_since=0
+    elif [ "$(manual_off_since)" -ge "$activated_at" ]; then
+      # The user ran ostreamy off. Stay native; a new session still arms.
       log "layout switched off externally -> standby"
       activated=0
       quiet_until=$((now + QUIET))
+      drift_since=0
       remember_endpoints
-    elif [ $((now - last_live)) -ge "$GRACE" ]; then
-      log "no live client for ${GRACE}s -> native layout"
-      "$OSTREAMY" off >/dev/null 2>&1 || log "layout restore failed"
-      activated=0
-      quiet_until=$((now + QUIET))
+    elif ! mirror_active || [ "$(windows_on_panel)" -gt 0 ]; then
+      # No live socket is required here: Moonlight's control sockets close right
+      # after launch, so during a real session live is 0. Judge by the layout
+      # itself, and give the switch a moment to settle before recovering.
+      if [ "$drift_since" -eq 0 ]; then
+        drift_since=$now
+      elif [ $((now - drift_since)) -ge 2 ]; then
+        log "stream layout drifted -> moving windows back to $OUTPUT"
+        "$OSTREAMY" recover >/dev/null 2>&1 || true
+        drift_since=$now
+      fi
+    else
+      drift_since=0
     fi
   fi
+
   remember_endpoints
   scan_offset=$(log_size)
   sleep "$INTERVAL"

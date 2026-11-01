@@ -19,8 +19,13 @@ set -u
 
 OUTPUT=${OUTPUT:-STREAM}
 MODE=${MODE:-1920x1200@60}
-GRACE=${GRACE:-30}
 QUIET=${QUIET:-20}
+MANUAL_OFF_FILE=${OSTREAMY_MANUAL_OFF_FILE:-${XDG_RUNTIME_DIR:-/tmp}/ostreamy-manual-off}
+
+# `ostreamy off` records that the user asked for the desktop, so the watcher does
+# not treat a missing mirror as drift and switch the layout back on.
+mark_manual_off() { date +%s > "$MANUAL_OFF_FILE" 2>/dev/null || true; }
+manual_off_since() { cat "$MANUAL_OFF_FILE" 2>/dev/null || echo 0; }
 COOLDOWN=${COOLDOWN:-70}
 INTERVAL=${INTERVAL:-0.25}
 PORTS=${PORTS:-47984 47989 48010}

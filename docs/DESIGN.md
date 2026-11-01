@@ -87,6 +87,7 @@ Final rules:
 | `ESTAB`, `CLOSE-WAIT` or `SYN` on Sunshine ports | live session | keep layout armed, re-assert mirror |
 | a **new** remote endpoint on those ports | a fresh client | trigger switch-on |
 | `CLIENT DISCONNECTED` in `sunshine.log` | session ended | switch back (about 0.22 s) |
+| Sunshine unit inactive | host gone | switch back |
 | native layout + nothing live | deliberate manual `off` | standby, do not re-arm |
 
 The watcher keeps a snapshot of client endpoints and switches on when one appears
@@ -97,7 +98,10 @@ re-arm the layout.
 New endpoints alone were not enough either. When the Deck quits a stream it keeps
 polling its host list. Those polls create new short-lived connections, and they
 re-armed the layout two seconds after the session ended. A 20 s quiet window after
-a switch-off that came from a session end ignores them. A manual `ostreamy off`
+a switch-off that came from a session end ignores them. A quiet socket table is
+never used to end a session either: Moonlight's control connections close right
+after an app launches, so the watcher stayed armed on the log signal alone and a
+live-socket timeout would have disarmed mid-game. A manual `ostreamy off`
 opens no window, because the next real client has to arm immediately. A live
 connection or a `New streaming session started` line always arms.
 

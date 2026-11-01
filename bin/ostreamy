@@ -48,6 +48,10 @@ full_switch_off() {
   ensure_output >/dev/null 2>&1 || true
   focus_a_windowed_workspace
   # Authoritative: if a concurrent switch-on raced us, clear it again.
+  # Remember the request, unless the watcher itself is restoring the layout.
+  if [ "${OSTREAMY_INTERNAL:-0}" != "1" ]; then
+    mark_manual_off
+  fi
   for _ in 1 2 3; do
     mirror_active || break
     hyprctl reload >/dev/null 2>&1 || true
