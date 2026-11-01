@@ -31,6 +31,7 @@ full_switch_on() {
   move_workspaces "$(panel_name)" "$OUTPUT"
   sleep "$PUMP"
   apply_panel_rule mirror
+  focus_stream_workspace
 }
 
 full_switch_off() {
@@ -165,7 +166,7 @@ case "${1:-status}" in
   edit)    edit_config ;;
   status)  status ;;
   *)
-    printf 'usage: %s {ensure|on|off|mirror|fix|mode WxH[@Hz]|state|edit|status}\n' "${0##*/}" >&2
+    printf 'usage: %s {ensure|on|off|mirror|recover|fix|mode WxH[@Hz]|state|edit|status}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

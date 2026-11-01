@@ -84,9 +84,12 @@ while :; do
       activated=0
       quiet_until=$((now + QUIET))
     elif [ "$live" -gt 0 ]; then
-      if ! mirror_active; then
-        log "mirror dropped -> re-applying mirror"
-        "$OSTREAMY" mirror >/dev/null 2>&1 || true
+      # Recover when the mirror is gone or a window ended up on the panel. The
+      # earlier rule only re-applied the mirror, so a window (Steam Big Picture)
+      # that opened on the panel stayed there for the whole session.
+      if ! mirror_active || [ "$(windows_on_panel)" -gt 0 ]; then
+        log "stream layout drifted -> moving windows back to $OUTPUT"
+        "$OSTREAMY" recover >/dev/null 2>&1 || true
       fi
     elif ! mirror_active; then
       # A manual `ostreamy off` asks for the desktop. Treat the next QUIET seconds

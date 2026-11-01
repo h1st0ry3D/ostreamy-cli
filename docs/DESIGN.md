@@ -110,19 +110,29 @@ If `New streaming session started` appears while the layout is still native, the
 watcher switches the layout and restarts Sunshine. The restart costs about two
 seconds; a frozen frame needs a reconnect anyway.
 
-## 7. Workspace ids are numbers
+## 7. Focus must move with the workspaces
+
+Moving workspaces onto `STREAM` is not enough. Hyprland opens new windows on the
+focused monitor, so if the panel keeps focus, the next app launched by Sunshine
+(Steam Big Picture, a game) opens on the panel and the Deck shows an extended
+desktop instead of the game. `ostreamy on` now focuses a workspace on `STREAM` after
+mirroring, and the watcher calls `ostreamy recover` when the mirror drops or a
+windowed workspace appears on the panel. Recovery only moves workspaces and
+re-applies the mirror, never the mode, so it is safe mid-session.
+
+## 8. Workspace ids are numbers
 
 `hl.dsp.workspace.move({ workspace = "1", ... })` is accepted by the dispatcher but
 does nothing; the window then ends up on `mon=-1` when the output is removed. Pass an
 integer.
 
-## 8. A stale instance signature breaks everything silently
+## 9. A stale instance signature breaks everything silently
 
 After a compositor restart, long-lived shells and services keep the old
 `HYPRLAND_INSTANCE_SIGNATURE`, and every `hyprctl` call fails. Every script resolves
 the live instance from `hyprctl instances` instead of trusting the environment.
 
-## 9. Codec and HDR reality
+## 10. Codec and HDR reality
 
 - HEVC only. AV1 must not be advertised: no Steam Deck has an AV1 hardware decoder,
   so a session would software-decode and stutter. `av1_mode = 1`.
@@ -133,7 +143,7 @@ the live instance from `hyprctl instances` instead of trusting the environment.
 - VP9 is unavailable: Sunshine's encoders are nvenc/quicksync/amdvce/vaapi/vulkan/
   software, NVENC has no VP9 encoder, and Moonlight supports H.264/HEVC/AV1 only.
 
-## 10. Restoring the panel means its native mode, not its current one
+## 11. Restoring the panel means its native mode, not its current one
 
 While the panel mirrors a 16:10 output it reports that output's size. Deriving the
 "restore" mode from the panel's current resolution therefore restores the Deck's
@@ -141,7 +151,7 @@ resolution (1920x1200) instead of the monitor's (2560x1440@144). Ostreamy picks 
 panel's largest available mode and the highest refresh within it, so the result does
 not depend on whether a mirror is active.
 
-## 11. Ordering that avoids the overlap warning
+## 12. Ordering that avoids the overlap warning
 
 Both directions used to overlap for a moment:
 

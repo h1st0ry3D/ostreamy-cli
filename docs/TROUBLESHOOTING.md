@@ -30,6 +30,19 @@ ostreamy ensure
 systemctl --user restart sunshine
 ```
 
+## Game opens on the monitor while the Deck shows an extended desktop
+
+Sunshine launches apps on the focused monitor. If the panel kept focus, the app
+landed there and the stream only showed the empty output.
+
+```bash
+journalctl --user -u ostreamy-watch -n 10     # look for "stream layout drifted"
+ostreamy recover                              # move windows back, re-apply mirror
+ostreamy status                               # windows and active workspace on STREAM
+```
+
+`ostreamy on` focuses `STREAM`; the watcher recovers on its own within a poll.
+
 ## No pointer input, workspace shortcuts dead, only wallpaper visible
 
 An invisible output holds focus or overlaps the primary.

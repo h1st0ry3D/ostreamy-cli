@@ -138,6 +138,29 @@ apply_panel_rule() {
   fi
 }
 
+# Focus a workspace on the streaming output. New windows open on the focused
+# monitor, so without this Steam Big Picture (and anything else launched after the
+# switch) opens on the panel instead of the captured output.
+focus_stream_workspace() {
+  local ws
+  ws=$(hyprctl workspaces -j 2>/dev/null |
+         jq -r --arg m "$OUTPUT" '[.[] | select(.monitor == $m and .windows > 0)] | sort_by(-.windows) | .[0].id // empty')
+  [ -n "$ws" ] || ws=$(hyprctl workspaces -j 2>/dev/null |
+         jq -r --arg m "$OUTPUT" '[.[] | select(.monitor == $m)] | .[0].id // empty')
+  [ -n "$ws" ] || return 0
+  hyprctl dispatch "hl.dsp.focus({ workspace = $ws })" >/dev/null 2>&1 || true
+}
+
+# How many workspaces with windows sit on the physical panel while the layout is
+# meant to be stream-ready. Used by the watcher to notice a window that opened on
+# the panel, or a workspace that slipped back there.
+windows_on_panel() {
+  local name
+  name=$(panel_name); [ -n "$name" ] || { echo 0; return; }
+  hyprctl workspaces -j 2>/dev/null |
+    jq -r --arg m "$name" '[.[] | select(.monitor == $m and .windows > 0)] | length'
+}
+
 focus_a_windowed_workspace() {
   local name ws
   name=$(panel_name); [ -n "$name" ] || return 0
