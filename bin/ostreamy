@@ -115,6 +115,19 @@ set_mode() {
   printf 'stream mode set to %s\n' "$mode"
 }
 
+# Re-assert only the mirror. Used by the watcher while a client is connected.
+mirror_only() { apply_panel_rule mirror; }
+
+# Move windows that opened on the panel back to the capture output. No mode
+# changes, so it is safe mid-session. The mirror is applied again after the moves,
+# because moving workspaces re-applies monitors.lua and drops the runtime mirror.
+recover() {
+  apply_panel_rule mirror
+  move_workspaces "$(panel_name)" "$OUTPUT"
+  apply_panel_rule mirror
+  focus_stream_workspace
+}
+
 # Machine-readable state for the Omarchy shell plugin.
 state() {
   local streaming=false w h fps
@@ -159,7 +172,8 @@ case "${1:-status}" in
   ensure)  ensure_output >/dev/null 2>&1; sync_hypr_mode; status ;;
   on)      full_switch_on;  status ;;
   off)     full_switch_off; status ;;
-  mirror)  apply_panel_rule mirror ;;
+  mirror)  mirror_only ;;
+  recover) recover ;;
   fix)     move_workspaces "$OUTPUT" "$(panel_name)"; focus_a_windowed_workspace ;;
   mode)    set_mode "${2:-}" ;;
   state)   state ;;
