@@ -125,10 +125,12 @@ tests/lint.sh            syntax and hygiene checks, plus shellcheck when install
 Makefile                 make check runs lint, smoke and verify
 ```
 
-Configuration lives in `~/.config/ostreamy/config.sh` (output name, mode, quiet
-window, poll interval, ports). `MODE` is `WIDTHxHEIGHT@HZ`; prefer `ostreamy mode` over
-editing it by hand, because the command also updates the Hyprland rule. If you do
-edit it, run `ostreamy ensure` afterwards to sync the rule.
+Configuration lives in `~/.config/ostreamy/config.sh` (output name, mode, scale,
+quiet window, poll interval, ports). `MODE` is `WIDTHxHEIGHT@HZ`; prefer `ostreamy mode`
+over editing it by hand, because the command also updates the Hyprland rule. If you do
+edit it, run `ostreamy ensure` afterwards to sync the rule. `SCALE` must stay `1`:
+omitting `scale` from the monitor rule makes Hyprland auto-scale a 1200p headless
+output to 2, which halves the logical desktop the client sees.
 
 ## Checks
 

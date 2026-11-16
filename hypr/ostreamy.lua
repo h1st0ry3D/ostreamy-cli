@@ -14,4 +14,4 @@
 -- start and silently falls back to monitors[0] if the target is missing; the
 -- resolution then changes under the live encoder and the video freezes while input
 -- keeps working.
-hl.monitor({ output = "__OUTPUT__", mode = "__MODE__", position = "__POS__" })
+hl.monitor({ output = "__OUTPUT__", mode = "__MODE__", position = "__POS__", scale = __SCALE__ })

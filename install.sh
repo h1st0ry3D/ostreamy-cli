@@ -131,7 +131,8 @@ if [ "$do_hypr" -eq 1 ]; then
       printf '\n%s\n' "$MARK_BEGIN_LUA"
       # The template already has "--" comments; code lines must stay live.
       sed -e "s|__MODE__|$mode|g" -e "s|__POS__|$pos|g" \
-          -e "s|__OUTPUT__|${OUTPUT:-STREAM}|g" "$REPO/hypr/ostreamy.lua"
+          -e "s|__OUTPUT__|${OUTPUT:-STREAM}|g" -e "s|__SCALE__|${SCALE:-1}|g" \
+          "$REPO/hypr/ostreamy.lua"
       printf '%s\n' "$MARK_END_LUA"
     } > "$merged"
     rm -f "$stripped"

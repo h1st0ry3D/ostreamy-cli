@@ -76,10 +76,18 @@ while :; do
     else
       # Do not fight a deliberate `ostreamy on`: only a *native* layout should
       # have focus on the panel.
-      focused=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
-      if [ "$focused" = "$OUTPUT" ] && ! mirror_active; then
-        log "focus left on $OUTPUT while idle -> restoring panel"
-        "$OSTREAMY" fix >/dev/null 2>&1 || true
+      # Headless host (panel switched off or unplugged): $OUTPUT is the only
+      # display, so focus on it IS the correct layout and there is nothing to
+      # restore to. Without this guard the check below never stops firing - it
+      # logged twice a poll and burned ~20% of a core doing nothing.
+      if [ -z "$(panel_name)" ]; then
+        :
+      else
+        focused=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
+        if [ "$focused" = "$OUTPUT" ] && ! mirror_active; then
+          log "focus left on $OUTPUT while idle -> restoring panel"
+          "$OSTREAMY" fix >/dev/null 2>&1 || true
+        fi
       fi
     fi
   else
@@ -102,7 +110,7 @@ while :; do
       quiet_until=$((now + QUIET))
       drift_since=0
       remember_endpoints
-    elif ! mirror_active || [ "$(windows_on_panel)" -gt 0 ]; then
+    elif ! layout_ok; then
       # No live socket is required here: Moonlight's control sockets close right
       # after launch, so during a real session live is 0. Judge by the layout
       # itself, and give the switch a moment to settle before recovering.

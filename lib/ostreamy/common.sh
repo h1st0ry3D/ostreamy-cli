@@ -19,6 +19,7 @@ set -u
 
 OUTPUT=${OUTPUT:-STREAM}
 MODE=${MODE:-1920x1200@60}
+SCALE=${SCALE:-1}               # 1: Hyprland auto-scale picks 2 for a headless 1200p output
 QUIET=${QUIET:-20}
 MANUAL_OFF_FILE=${OSTREAMY_MANUAL_OFF_FILE:-${XDG_RUNTIME_DIR:-/tmp}/ostreamy-manual-off}
 
@@ -99,12 +100,12 @@ ensure_output() {
   local park
   if ! exists; then
     hyprctl output create headless "$OUTPUT" >/dev/null 2>&1 || return 1
-    hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$(park_position)\" })" >/dev/null 2>&1 || true
-    hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$(park_position)\" })" >/dev/null 2>&1 || true
+    hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$(park_position)\", scale = $SCALE })" >/dev/null 2>&1 || true
+    hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$(park_position)\", scale = $SCALE })" >/dev/null 2>&1 || true
     return 2   # created
   fi
   park=$(park_position)
-  hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$park\" })" >/dev/null 2>&1 || true
+  hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$park\", scale = $SCALE })" >/dev/null 2>&1 || true
   return 0
 }
 
@@ -180,6 +181,17 @@ mirror_active() {
   id=$(monitors | jq -r --arg n "$OUTPUT" '.[] | select(.name == $n) | .id' | head -n 1)
   [ -n "$id" ] || return 1
   monitors | jq -e --arg id "$id" --arg n "$OUTPUT" '.[] | select(.name != $n and .mirrorOf == $id)' >/dev/null 2>&1
+}
+
+# Is the stream layout in place? A host with no physical output (panel switched
+# off or unplugged, which is the normal headless state here) has no panel to
+# mirror: workspaces sitting on $OUTPUT is already the correct stream layout, so
+# mirror_active() must not be consulted there. Treating "no mirror" as drift made
+# the watcher re-run recover() every 2 s forever on a headless desktop.
+layout_ok() {
+  [ "$(windows_on_panel)" -gt 0 ] && return 1
+  [ -z "$(panel_name)" ] && return 0
+  mirror_active
 }
 
 SEEN_FILE=${OSTREAMY_SEEN_FILE:-${XDG_RUNTIME_DIR:-/tmp}/ostreamy-seen}

@@ -86,7 +86,7 @@ sync_hypr_mode() {
   width=${MODE%%x*}; pos="-${width}x0"
   tmp=$(mktemp)
   awk -v b="$MARK_BEGIN" -v e="$MARK_END" \
-      -v rule="hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$pos\" })" \
+      -v rule="hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$pos\", scale = $SCALE })" \
       -v pat="hl.monitor({ output = \"$OUTPUT\"" '
     $0 == b { inside = 1; print; next }
     $0 == e { inside = 0; print; next }
@@ -115,7 +115,7 @@ set_mode() {
   fi
   save_mode "$mode"
   sync_hypr_mode
-  hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$mode\", position = \"$(park_position)\" })" >/dev/null 2>&1 || true
+  hyprctl eval "hl.monitor({ output = \"$OUTPUT\", mode = \"$mode\", position = \"$(park_position)\", scale = $SCALE })" >/dev/null 2>&1 || true
   printf 'stream mode set to %s\n' "$mode"
 }
 
@@ -163,14 +163,17 @@ edit_config() {
 }
 
 status() {
-  printf 'configured mode: %s\n' "$MODE"
+  printf 'configured mode: %s (scale %s)\n' "$MODE" "$SCALE"
   printf 'output: %s (%s)\n' "$OUTPUT" "$(exists && echo present || echo MISSING)"
   monitors | jq -r '.[] | "\(.name) \(.width)x\(.height)@\(.refreshRate) at \(.x),\(.y) mirrorOf=\(.mirrorOf) disabled=\(.disabled)"'
   hyprctl workspaces -j 2>/dev/null | jq -r '.[] | "ws \(.id) -> \(.monitor) (\(.windows) windows)"'
 }
 
 resolve_sig
-[ -z "$(panel_name)" ] && { echo "no physical output found; is Hyprland running?" >&2; exit 1; }
+# No hard requirement for a physical output: on a headless host (panel off) the
+# old guard exited 1 here, which is exactly why nothing ever created STREAM after
+# a reboot - Sunshine then started without a capture target. Commands that move
+# things onto the panel (off, fix) already no-op when panel_name is empty.
 
 case "${1:-status}" in
   ensure)  ensure_output >/dev/null 2>&1; sync_hypr_mode; status ;;

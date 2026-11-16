@@ -165,3 +165,25 @@ Both directions used to overlap for a moment:
 | 2 | move workspaces onto `STREAM` | move workspaces back to the panel |
 | 3 | apply the mirror | focus a workspace that has windows |
 | 4 | re-apply the mirror | `ostreamy fix` if focus is still on `STREAM` |
+
+## 13. Scale must be given explicitly
+
+A monitor rule that omits `scale` gets **auto** scale, and auto resolves to 2 on a
+headless output at 1920x1200 -- and at 2560x1440. Measured on Hyprland 0.56.2:
+
+```
+hyprctl output create headless TEST                                         -> scale=1
+hyprctl eval 'hl.monitor({ output = "TEST", mode = "1920x1200@60", ... })'  -> scale=2
+hyprctl eval 'hl.monitor({ output = "TEST", mode = "2560x1440@144", ... })' -> scale=2
+```
+
+The buffer stays 1920x1200, but the logical desktop becomes 960x600, so every
+window is drawn at half size and upscaled: the client gets a zoomed, soft picture
+and games lose their real UI density. `SCALE` (default 1) is therefore passed on
+every `hl.monitor` call Ostreamy makes -- creation, `ensure`, `ostreamy mode`, and
+the rule `sync_hypr_mode` writes -- so the value cannot be lost by a rewrite.
+
+It also makes the layout self-healing: Omarchy's `SUPER + /` monitor-scaling action
+targets the *focused* monitor, which while streaming is `STREAM`. That is how the
+scale reached 2 here in the first place (see `~/.local/state/omarchy/monitor-scaling.log`).
+A pinned `SCALE` is reapplied at the next switch-on.

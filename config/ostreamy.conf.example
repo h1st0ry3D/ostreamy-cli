@@ -10,6 +10,14 @@ OUTPUT=STREAM
 # `ostreamy mode 1920x1200@90`; that also updates the Hyprland rule.
 MODE=1920x1200@60
 
+# Scale of that headless output. Keep it at 1. A monitor rule that omits `scale`
+# gets Hyprland's auto scale, which resolves to 2 on a headless 1920x1200 output
+# (2560x1440 too): every window then renders into a 960x600 logical desktop and the
+# client sees a zoomed, soft picture. Ostreamy passes `SCALE` on every `hl.monitor`
+# call it makes, so a stray SUPER + / (Omarchy's monitor scaling, which acts on the
+# focused monitor -- `STREAM` while streaming) is undone at the next switch-on.
+SCALE=1
+
 # Seconds after a switch-off during which *new short-lived* connections (Moonlight
 # menu/status polling after the user quits) cannot re-arm the layout. A real session
 # still arms it: a live connection or "New streaming session started" bypasses this.
