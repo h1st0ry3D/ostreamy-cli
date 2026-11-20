@@ -83,7 +83,7 @@ sync_hypr_mode() {
   local width pos tmp
   [ -f "$HYPR_CONF" ] || return 0
   grep -qF -- "$MARK_BEGIN" "$HYPR_CONF" || return 0
-  width=${MODE%%x*}; pos="-${width}x0"
+  pos="$(park_position)"
   tmp=$(mktemp)
   awk -v b="$MARK_BEGIN" -v e="$MARK_END" \
       -v rule="hl.monitor({ output = \"$OUTPUT\", mode = \"$MODE\", position = \"$pos\", scale = $SCALE })" \

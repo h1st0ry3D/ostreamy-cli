@@ -8,7 +8,8 @@
 # encoder and the video freezes while input keeps working.
 #
 # Only the *layout* changes:
-#   idle      STREAM parked off to the left (negative x), panel native, focus panel
+#   idle      STREAM parked beyond a gap to the right of the panel, panel native,
+#             focus panel -- the gap is what keeps the pointer off the hidden output
 #   streaming panel mirrors STREAM, workspaces move onto STREAM
 
 set -u
@@ -21,6 +22,11 @@ OUTPUT=${OUTPUT:-STREAM}
 MODE=${MODE:-1920x1200@60}
 SCALE=${SCALE:-1}               # 1: Hyprland auto-scale picks 2 for a headless 1200p output
 QUIET=${QUIET:-20}
+# X position used to park STREAM while idle. It must be far enough from the panel that
+# the pointer cannot cross in a single motion event: Hyprland clamps the pointer to the
+# nearest monitor, so a flush park (the old -<width>x0) is a live layout region that
+# steals focus at the panel edge. See park_position().
+PARK_X=${PARK_X:-6000}
 MANUAL_OFF_FILE=${OSTREAMY_MANUAL_OFF_FILE:-${XDG_RUNTIME_DIR:-/tmp}/ostreamy-manual-off}
 
 # `ostreamy off` records that the user asked for the desktop, so the watcher does
@@ -83,16 +89,32 @@ panel_best_mode() {
 panel_scale() {
   monitors | jq -r --arg n "$1" '.[] | select(.name == $n) | "\(.scale)"' | head -n 1
 }
-stream_width() {
-  monitors | jq -r --arg n "$OUTPUT" '.[] | select(.name == $n) | .width' | head -n 1
-}
 
-# Park STREAM immediately to the left of the origin: never overlaps the panel, and
-# the panel's own "auto" placement then lands at 0,0 without editing its rule.
+# Park STREAM *beyond a gap* to the right of the panel, not flush against it.
+#
+# A parked, unmirrored output is a real region of the layout. Flush against the panel
+# (the old -<width>x0), the pointer leaves the panel at the shared edge, Hyprland's
+# default input:follow_mouse = 1 focuses the invisible output, the workspace it holds
+# becomes active, and cursor:warp_on_monitor_change warps the pointer to the middle of
+# the screen -- "the mouse at the border changes workspace and jumps back".
+#
+# Hyprland clamps the pointer to the nearest monitor, so a gap wider than any single
+# pointer motion event makes STREAM unreachable: pushing against the panel edge just
+# sticks at the edge. A 1000 Hz mouse reports at most ~250 px per event, so 600 px of
+# gap is already safe; the default leaves several thousand. A mirror instead of a gap
+# would remove the region entirely, but a mirror that points at the panel aborts
+# Hyprland when the panel is switched off (docs/DESIGN.md section 14).
 park_position() {
-  local w
-  w=$(stream_width); [ -n "$w" ] || w=1920
-  printf -- '-%sx0' "$w"
+  local name px pw right
+  name=$(panel_name)
+  px=$(monitors | jq -r --arg n "$name" '.[] | select(.name == $n) | .x // 0' | head -n 1)
+  pw=$(monitors | jq -r --arg n "$name" '.[] | select(.name == $n) | .width // 0' | head -n 1)
+  right=$(( ${px:-0} + ${pw:-0} ))
+  if [ $(( PARK_X - right )) -lt 1500 ]; then
+    printf '%sx0' $(( right + 2000 ))
+  else
+    printf '%sx0' "$PARK_X"
+  fi
 }
 
 # STREAM must exist with a stable mode. Create it if missing and pin the mode.

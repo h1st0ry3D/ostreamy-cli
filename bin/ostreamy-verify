@@ -72,6 +72,18 @@ else
   ok "native: panel not mirroring"
   [ "$ws_on_stream" -eq 0 ] && ok "no windows parked on $OUTPUT" \
     || bad "$ws_on_stream workspace(s) with windows are on $OUTPUT while idle"
+  # Pointer reachability. Hyprland clamps the pointer to the nearest monitor, so the
+  # gap between the panel's right edge and a parked $OUTPUT is what stops a border
+  # crossing from focusing it (and activating its workspace).
+  gap=$(monitors | jq -r --arg n "$OUTPUT" '
+    ([.[] | select(.name != $n)]) as $p
+    | ([.[] | select(.name == $n)][0]) as $s
+    | if ($p|length) == 0 or $s == null then empty
+      else (($p[0].x + $p[0].width) as $right | $s.x - $right) end' | head -n 1)
+  if [ -n "$gap" ]; then
+    [ "$gap" -ge 600 ] && ok "parked ${gap}px from the panel: unreachable by the pointer" \
+      || bad "parked only ${gap}px from the panel: a border crossing can focus $OUTPUT (run 'ostreamy ensure')"
+  fi
   focus=$(monitors | jq -r '[.[] | select(.focused)][0].name // empty')
   [ "$focus" = "$OUTPUT" ] && bad "focus is on $OUTPUT while idle (run 'ostreamy fix')" \
     || ok "focus on $focus"

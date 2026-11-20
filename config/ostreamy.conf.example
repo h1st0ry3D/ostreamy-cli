@@ -18,6 +18,15 @@ MODE=1920x1200@60
 # focused monitor -- `STREAM` while streaming) is undone at the next switch-on.
 SCALE=1
 
+# X position the headless output is parked at while idle, in the monitor layout.
+# It must stay well clear of the panel: Hyprland clamps the pointer to the nearest
+# monitor, and a parked output flush against the panel becomes reachable at the
+# shared edge (follow_mouse then focuses it and activates its workspace, which looks
+# like "the mouse at the border switches workspace"). Leave a gap of at least 600 px;
+# the default leaves thousands on a 2560-wide panel. Ostreamy widens it automatically
+# when the panel's own right edge would come within 1500 px.
+PARK_X=6000
+
 # Seconds after a switch-off during which *new short-lived* connections (Moonlight
 # menu/status polling after the user quits) cannot re-arm the layout. A real session
 # still arms it: a live connection or "New streaming session started" bypasses this.

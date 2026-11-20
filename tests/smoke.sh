@@ -38,6 +38,13 @@ printf '%s\n' '== idle =='
 "$OSTREAMY" off >/dev/null 2>&1
 settle
 [ "$(mirror)" = "none" ] && ok "no mirror" || bad "still mirroring"
+gap=$(monitors | jq -r --arg n "$OUTPUT" '
+  ([.[] | select(.name != $n)]) as $p
+  | ([.[] | select(.name == $n)][0]) as $s
+  | if ($p|length) == 0 or $s == null then empty
+    else (($p[0].x + $p[0].width) as $right | $s.x - $right) end' | head -n 1)
+[ -n "$gap" ] && { [ "$gap" -ge 600 ] && ok "parked ${gap}px from the panel (pointer cannot reach it)" \
+  || bad "parked only ${gap}px from the panel"; }
 native=$(panel)
 ok "panel $native"
 exists && ok "$OUTPUT exists" || bad "$OUTPUT missing"

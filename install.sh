@@ -105,8 +105,9 @@ if [ "$do_hypr" -eq 1 ]; then
     # shellcheck disable=SC1090
     . "$CONF"
     mode="${MODE:-1920x1200@60}"
-    width="${mode%%x*}"
-    pos="-${width}x0"
+    # Same park as `ostreamy ensure`/`off` apply. A static value is fine here: it is
+    # only a fallback for a host whose panel is wider than PARK_X.
+    pos="${PARK_X:-6000}x0"
 
     # Strip every existing block, in either marker style, then append one fresh
     # block. This migrates the old `#` markers and collapses duplicates left by
