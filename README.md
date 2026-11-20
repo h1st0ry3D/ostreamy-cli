@@ -16,13 +16,17 @@ the virtual display again when nobody is streaming.
                             └────────┘
 ```
 
+While idle, `STREAM` is parked beyond a gap to the right of the panel: close enough to
+be captured, far enough that the pointer cannot cross to it.
+
 ## What it solves
 
 | Problem | Cause | Ostreamy's answer |
 |---|---|---|
 | Stream goes black when the monitor is switched off | the panel's output disappears, Hyprland stops compositing, screencopy has no source | capture a headless output that never disappears |
 | Stream freezes after a few seconds, controller still works | Sunshine resolved `output_name` before the output existed, fell back to the panel, then the resolution changed under the live encoder | the output stays enabled with a fixed mode; only the layout moves |
-| Invisible 1920x1200 display steals mouse/keyboard and workspace shortcuts | two enabled outputs share coordinates; the virtual one holds focus | the output is parked at a negative x and never overlaps; `fix` restores focus |
+| Invisible 1920x1200 display steals mouse/keyboard and workspace shortcuts | two enabled outputs share coordinates; the virtual one holds focus | the output is parked with a gap and never overlaps; `fix` restores focus |
+| Mouse at the panel edge switches workspace and jumps back to the middle | a parked output is a real layout region; `follow_mouse` focuses it at the shared edge and the monitor-change warp recentres the cursor | parked beyond a gap wider than one pointer event, so Hyprland's nearest-monitor clamp keeps the pointer on the panel |
 | `off` does not restore the desktop | closed-client sockets or menu polling re-armed the layout | only a *new* client endpoint outside a 20 s post-session quiet window re-arms it |
 | Desktop returns squashed at 60 Hz | panel stuck mirroring the 16:10 stream | `off` reloads a mirror-free rule and restores the panel's own mode |
 
@@ -118,6 +122,8 @@ config/                  example config (installed to ~/.config/ostreamy/config.
 hypr/ostreamy.lua        Hyprland snippet template (inserted by install.sh)
 systemd/                 user unit for the watcher
 docs/DESIGN.md           why each decision exists, with the log evidence
+docs/UPSTREAM-BUGS.md    the Hyprland abort and Quickshell crash seen while testing
+                         an idle layout where the panel was a mirror source
 docs/TROUBLESHOOTING.md  symptoms, causes and fixes
 docs/CLIENT.md           Steam Deck and Moonlight specifics
 tests/smoke.sh           end-to-end switch test against the running session

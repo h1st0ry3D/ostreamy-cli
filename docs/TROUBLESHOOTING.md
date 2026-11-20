@@ -168,3 +168,22 @@ journalctl --user -u ostreamy-watch -n 30
 It should log `watching Moonlight activity (poll 0.25s ...)` at start. No
 `client connected` line while you stream means the port list or socket detection is
 wrong. Report the `ss -Htan | grep -E ':(47984|47989|48010)'` output.
+
+## Mouse at the panel edge switches workspace and jumps back to the middle
+
+A parked `STREAM` is a real layout region. Parked flush against the panel,
+`input:follow_mouse = 1` focuses it when the pointer crosses the shared edge, its
+workspace becomes active, and `cursor:warp_on_monitor_change` warps the pointer to that
+output's last focus position.
+
+```bash
+ostreamy status     # STREAM x should be thousands of px right of the panel's edge
+ostreamy ensure     # re-apply the park (widens automatically for wider panels)
+```
+
+Hyprland clamps the pointer to the nearest monitor, so the gap is what makes the hidden
+output unreachable. If `STREAM` sits right next to the panel, a stale rule is in
+`~/.config/hypr/monitors.lua`: re-run `./install.sh` to rewrite the managed block.
+
+Do not "fix" this by making `STREAM` mirror the panel: disabling or unplugging a mirror
+source aborts Hyprland (see DESIGN.md section 14).

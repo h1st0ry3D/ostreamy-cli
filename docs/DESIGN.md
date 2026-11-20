@@ -187,3 +187,51 @@ It also makes the layout self-healing: Omarchy's `SUPER + /` monitor-scaling act
 targets the *focused* monitor, which while streaming is `STREAM`. That is how the
 scale reached 2 here in the first place (see `~/.local/state/omarchy/monitor-scaling.log`).
 A pinned `SCALE` is reapplied at the next switch-on.
+
+## 14. A parked output is a pointer target, and a mirror of the panel is a crash
+
+The hidden output is enabled, so it holds a region of the virtual layout. The first
+version parked it flush against the panel (`-<width>x0`), which made the panel's left
+edge a doorway into it. With Hyprland's defaults:
+
+```
+input:follow_mouse            = 1     # movement always changes focus
+cursor:warp_on_monitor_change = -1    # follows cursor:warp_on_change_workspace = 1
+```
+
+crossing the edge focuses `STREAM`, its (empty) workspace becomes active and the
+cursor is warped to that output's last focus position -- "the mouse at the border
+switches workspace and jumps back to the middle of the screen". Measured on 0.56.2
+(`hl.dsp.cursor.move` is a warp, so it doubles as a worst-case single event):
+
+```
+STREAM at 4000x0, panel at 0x0 (gap 1440)
+  aim x=3000  -> cursor 2559,700, HDMI-A-1        # clamped: panel is nearer
+  aim x=3999  -> cursor 4000,700, STREAM          # nearest monitor wins
+```
+
+The clamp is to the *nearest* monitor, so the gap is the defence: a gap wider than
+one pointer motion event makes `STREAM` unreachable, and pushing against the edge
+sticks at the edge instead of focusing anything. A 1000 Hz mouse reports at most
+~250 px per event; `PARK_X=6000` leaves thousands on a 2560-wide panel, and
+`park_position()` widens it if a wider panel would leave less than 1500 px.
+
+The obvious alternative -- make `STREAM` mirror the panel while idle so it owns no
+layout region at all -- is not safe on this hardware. It works until the panel goes
+away: disabling (or unplugging) an output that is the source of a mirror aborts the
+compositor.
+
+```
+ctr  Command Line: Hyprland --watchdog-fd 4
+     Signal: 6 (ABRT)
+     #2  abort
+     #6  CInputManager::refocusLastWindow(CSharedPointer<CMonitor>)
+     #7  Desktop::View::CLayerSurface::onUnmap()
+     #8  Desktop::View::CLayerSurface::onDestroy()
+     ... wl_event_loop_dispatch -> wl_display_run
+```
+
+The panel is the output that can vanish, so it must never be a mirror source. That is
+also why the shipped topology mirrors *onto* the panel and never the reverse:
+`STREAM` is the permanent output and stays the source. The core dump and the exact
+repro are written up in `UPSTREAM-BUGS.md`.
